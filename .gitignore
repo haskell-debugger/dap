@@ -1,0 +1,36 @@
+# haskell
+stack.yaml.lock
+.stack-work/
+dist-newstyle/
+dist/
+cabal.project.local
+.ghc.environment.*
+*.o
+*.hi
+
+# nix
+result*
+
+# osx
+.DS_Store
+
+# emacs
+*~
+
+# tags
+TAGS
+main
+
+# C
+./main
+*.dSYM
+
+# stg
+*.fullpak
+*.modpak
+
+# tags
+tags
+
+# external-stg-interpreter
+.ext-stg-work
