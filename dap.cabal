@@ -53,6 +53,8 @@ library
 test-suite tests
   type:
     exitcode-stdio-1.0
+  ghc-options:
+    -Wall
   hs-source-dirs:
     test, src
   main-is:
