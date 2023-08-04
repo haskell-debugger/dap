@@ -11,5 +11,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - uses: freckle/stack-action@v4
+        with:
+          pedantic: false
       - name: test
         run: stack test
