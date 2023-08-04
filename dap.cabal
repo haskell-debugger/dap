@@ -43,6 +43,8 @@ library
     unordered-containers >= 0.2.19 && < 0.3,
     stm                  >= 2.5.0  && < 2.6,
     transformers-base    >= 0.4.6  && < 0.5
+  ghc-options:
+    -Wall
   hs-source-dirs:
     src
   default-language:

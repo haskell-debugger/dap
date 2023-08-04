@@ -52,26 +52,17 @@ module DAP.Adaptor
   , runAdaptorWith
   ) where
 ----------------------------------------------------------------------------
-import           Control.Concurrent         ( ThreadId )
-import           Control.Concurrent.MVar    ( newMVar, newEmptyMVar, modifyMVar_
-                                            , takeMVar, putMVar, readMVar, MVar )
+import           Control.Concurrent.MVar    ( modifyMVar_, MVar )
 import           Control.Concurrent.Lifted  ( fork, killThread )
-import qualified Control.Concurrent.MVar    as MVar
 import           Control.Exception          ( throwIO )
 import           Control.Concurrent.STM     ( atomically, readTVarIO, modifyTVar' )
 import           Control.Monad              ( when, unless )
 import           Control.Monad.Except       ( runExceptT, throwError )
-import           Control.Monad.State        ( evalStateT, runStateT, execStateT, gets
-                                            , MonadIO(liftIO), gets, modify', put )
+import           Control.Monad.State        ( runStateT, gets, MonadIO(liftIO), gets, modify' )
 import           Data.Aeson                 ( FromJSON, Result (..), fromJSON )
-import           Data.Maybe                 ( fromMaybe )
 import           Data.Aeson.Encode.Pretty   ( encodePretty )
 import           Data.Aeson.Types           ( object, Key, KeyValue((.=)), ToJSON )
-import qualified Data.IntMap.Strict         as I
-import           Data.IntMap.Strict         (IntMap)
-import qualified Data.IntSet                as IntSet
-import           Data.IntSet                (IntSet)
-import           Data.Text                  ( unpack, Text, pack )
+import           Data.Text                  ( unpack, pack )
 import           Network.Socket             ( SockAddr )
 import           System.IO                  ( Handle )
 import qualified Data.ByteString.Lazy.Char8 as BL8
@@ -81,10 +72,6 @@ import qualified Data.HashMap.Strict        as H
 import           DAP.Types
 import           DAP.Utils
 import           DAP.Internal
-----------------------------------------------------------------------------
--- | Meant for internal consumption
-logDebug :: DebugStatus -> BL8.ByteString -> Adaptor app ()
-logDebug d = logWithAddr DEBUG (Just d)
 ----------------------------------------------------------------------------
 logWarn :: BL8.ByteString -> Adaptor app ()
 logWarn msg = logWithAddr WARN Nothing (withBraces msg)
@@ -204,7 +191,7 @@ getDebugSessionWithThreadIdAndSessionId = do
   appStore <- liftIO . readTVarIO =<< getAppStore
   case H.lookup sessionId appStore of
     Nothing -> do
-      sendError (ErrorMessage (pack "")) Nothing
+      appNotFound sessionId
     Just (tid, app) ->
       pure (sessionId, tid, app)
   where
@@ -220,7 +207,7 @@ getDebugSessionWithThreadIdAndSessionId = do
 ----------------------------------------------------------------------------
 destroyDebugSession :: Adaptor app ()
 destroyDebugSession = do
-  (sessionId, DebuggerThreadState {..}, app) <- getDebugSessionWithThreadIdAndSessionId
+  (sessionId, DebuggerThreadState {..}, _) <- getDebugSessionWithThreadIdAndSessionId
   store <- getAppStore
   liftIO $ do
     killThread debuggerThread
@@ -286,7 +273,7 @@ writeToHandle
   -> Handle
   -> event
   -> Adaptor app ()
-writeToHandle addr handle evt = do
+writeToHandle _ handle evt = do
   let msg = encodeBaseProtocolMessage evt
   debugMessage ("\n" <> encodePretty evt)
   withConnectionLock (BS.hPutStr handle msg)

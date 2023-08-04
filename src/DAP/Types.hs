@@ -96,7 +96,7 @@ module DAP.Types
     -- * Client
   , Adaptor                            (..)
   , AdaptorState                       (..)
-  , AppStore                           (..)
+  , AppStore
     -- * Errors
   , AdaptorException                   (..)
   , ErrorMessage                       (..)
@@ -201,9 +201,6 @@ module DAP.Types
   , DebuggerThreadState (..)
   ) where
 ----------------------------------------------------------------------------
-import           Data.Word                       ( Word32 )
-import           Data.IntMap.Strict              ( IntMap )
-import qualified Data.IntMap.Strict              as I
 import           Control.Monad.Base              ( MonadBase )
 import           Control.Monad.Except            ( MonadError, ExceptT )
 import           Control.Monad.Trans.Control     ( MonadBaseControl )
@@ -211,16 +208,14 @@ import           Control.Concurrent              ( ThreadId )
 import           Control.Concurrent.MVar         ( MVar )
 import           Control.Applicative             ( (<|>) )
 import           Data.Typeable                   ( typeRep )
-import           Control.Concurrent.STM          ( TVar, newTVarIO )
+import           Control.Concurrent.STM          ( TVar )
 import           Control.Exception               ( Exception )
 import           Control.Monad.State             ( StateT, MonadState, MonadIO )
 import           Data.Aeson                      ( (.:), (.:?), withObject, withText, object
-                                                 , FromJSON(parseJSON), Value(Null), KeyValue((.=))
-                                                 , ToJSON(toJSON), fieldLabelModifier
-                                                 , genericParseJSON, genericToJSON, defaultOptions
+                                                 , FromJSON(parseJSON), Value, KeyValue((.=))
+                                                 , ToJSON(toJSON), genericParseJSON, defaultOptions
                                                  )
 import           Data.Aeson.Types                ( Pair, typeMismatch )
-import           Data.IORef                      ( IORef )
 import           Data.Proxy                      ( Proxy(Proxy) )
 import           Data.String                     ( IsString(..) )
 import           Data.Time                       ( UTCTime )
@@ -231,10 +226,8 @@ import           Text.Read                       ( readMaybe )
 import           Data.Text                       (Text)
 import qualified Data.Text                       as T ( pack, unpack )
 import qualified Data.HashMap.Strict             as H
-import           GHC.TypeLits                    (TypeError)
-import qualified GHC.TypeLits                    as TypeLits
 ----------------------------------------------------------------------------
-import           DAP.Utils                       ( capitalize, toLowerCase, modifier, getName, genericParseJSONWithModifier, genericToJSONWithModifier )
+import           DAP.Utils                       ( capitalize, getName, genericParseJSONWithModifier, genericToJSONWithModifier )
 ----------------------------------------------------------------------------
 -- | Core type for Debug Adaptor to send and receive messages in a type safe way.
 -- the state is 'AdaptorState' which holds configuration information, along with

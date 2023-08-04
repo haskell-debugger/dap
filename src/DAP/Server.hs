@@ -23,24 +23,22 @@ module DAP.Server
 ----------------------------------------------------------------------------
 import           Control.Concurrent.MVar    ( MVar )
 import           Control.Monad              ( when )
-import           Control.Monad.Except       ( runExceptT )
 import           Control.Concurrent.MVar    ( newMVar, newEmptyMVar, modifyMVar_
-                                            , takeMVar, putMVar, readMVar )
+                                            , putMVar, readMVar )
 import           Control.Concurrent.STM     ( newTVarIO )
 import           Control.Exception          ( SomeException
                                             , IOException
                                             , catch
                                             , fromException
                                             , throwIO )
-import           Control.Monad              ( forever, void )
-import           Control.Monad.State        ( evalStateT, runStateT, execStateT, gets )
-import           DAP.Internal               ( withGlobalLock )
+import           Control.Monad              ( void )
+import           Control.Monad.State        ( gets )
 import           Data.Aeson                 ( decodeStrict, eitherDecode, Value, FromJSON )
 import           Data.Aeson.Encode.Pretty   ( encodePretty )
 import           Data.ByteString            ( ByteString )
 import           Data.Char                  ( isDigit )
 import           Network.Simple.TCP         ( serve, HostPreference(Host) )
-import           Network.Socket             ( socketToHandle, withSocketsDo, SockAddr, Socket )
+import           Network.Socket             ( socketToHandle, withSocketsDo, SockAddr )
 import           System.IO                  ( hClose, hSetNewlineMode, Handle, Newline(CRLF)
                                             , NewlineMode(NewlineMode, outputNL, inputNL)
                                             , IOMode(ReadWriteMode) )

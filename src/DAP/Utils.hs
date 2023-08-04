@@ -18,10 +18,11 @@
 module DAP.Utils where
 ----------------------------------------------------------------------------
 import           GHC.Generics               (Generic, Rep)
-import           Data.Aeson                 ( ToJSON(toJSON), Value, fieldLabelModifier
+import           Data.Aeson                 ( ToJSON, Value, fieldLabelModifier
                                             , genericToJSON, genericParseJSON, fieldLabelModifier
-                                            , defaultOptions, GToJSON, GFromJSON, Zero, Options
-                                            , constructorTagModifier, sumEncoding, SumEncoding(UntaggedValue), omitNothingFields
+                                            , defaultOptions, GToJSON, GFromJSON, Zero
+                                            , constructorTagModifier, sumEncoding
+                                            , SumEncoding(UntaggedValue), omitNothingFields
                                             )
 import           Data.Aeson.Types           ( Parser )
 import           Data.Aeson.Encode.Pretty   ( encodePretty )
