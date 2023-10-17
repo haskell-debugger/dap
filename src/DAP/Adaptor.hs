@@ -156,10 +156,10 @@ registerNewDebugSession
   -- used when sending events to the editor from the debugger (or from any forked thread).
   --
   -- >
-  -- > registerNewDebugSession sessionId appState $ loadDebugger : \withAdaptor ->
+  -- > registerNewDebugSession sessionId appState $ loadDebugger : [\withAdaptor ->
   -- >   forever $ getDebuggerOutput >>= \output -> do
   -- >     withAdaptor $ sendOutputEvent defaultOutputEvent { outputEventOutput = output }
-  -- >
+  -- >   ]
   --
   -> Adaptor app ()
 registerNewDebugSession k v debuggerConcurrentActions = do
