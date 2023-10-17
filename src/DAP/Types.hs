@@ -302,8 +302,7 @@ type AppStore app = TVar (H.HashMap SessionId (DebuggerThreadState, app))
 -- DAP server).
 data DebuggerThreadState
   = DebuggerThreadState
-  { debuggerThread :: ThreadId
-  , debuggerOutputEventThread :: ThreadId
+  { debuggerThreads :: [ThreadId]
   }
 
 ----------------------------------------------------------------------------
@@ -876,10 +875,12 @@ data EventType
   | EventTypeProgressEnd
   | EventTypeInvalidated
   | EventTypeMemory
+  | EventTypeCustom Text
   deriving stock (Show, Eq, Read, Generic)
 ----------------------------------------------------------------------------
 instance ToJSON EventType where
-  toJSON = genericToJSONWithModifier
+  toJSON (EventTypeCustom e) = toJSON e
+  toJSON e = genericToJSONWithModifier e
 ----------------------------------------------------------------------------
 data Command
   = CommandCancel
