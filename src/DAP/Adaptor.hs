@@ -144,10 +144,9 @@ setDebugSessionId session = modify' $ \s -> s { sessionId = Just session }
 registerNewDebugSession
   :: SessionId
   -> app
-  -> IO ()
-  -- ^ Action to run debugger (operates in a forked thread that gets killed when disconnect is set)
-  -> ((Adaptor app () -> IO ()) -> IO ())
-  -- ^ Long running operation, meant to be used as a sink for
+  -> [((Adaptor app () -> IO ()) -> IO ())]
+  -- ^ Actions to run debugger (operates in a forked thread that gets killed when disconnect is set)
+  -- Long running operation, meant to be used as a sink for
   -- the debugger to emit events and for the adaptor to forward to the editor
   -- This function should be in a 'forever' loop waiting on the read end of
   -- a debugger channel.
@@ -157,19 +156,18 @@ registerNewDebugSession
   -- used when sending events to the editor from the debugger (or from any forked thread).
   --
   -- >
-  -- > registerNewDebugSession sessionId appState loadDebugger $ \withAdaptor ->
+  -- > registerNewDebugSession sessionId appState $ loadDebugger : [\withAdaptor ->
   -- >   forever $ getDebuggerOutput >>= \output -> do
   -- >     withAdaptor $ sendOutputEvent defaultOutputEvent { outputEventOutput = output }
-  -- >
+  -- >   ]
   --
   -> Adaptor app ()
-registerNewDebugSession k v debuggerExecution outputEventSink = do
+registerNewDebugSession k v debuggerConcurrentActions = do
   store <- gets appStore
   adaptorStateMVar <- gets adaptorStateMVar
   debuggerThreadState <- liftIO $
     DebuggerThreadState
-      <$> fork debuggerExecution
-      <*> fork (outputEventSink (runAdaptorWith adaptorStateMVar))
+      <$> sequence [fork $ action (runAdaptorWith adaptorStateMVar) | action <- debuggerConcurrentActions]
   liftIO . atomically $ modifyTVar' store (H.insert k (debuggerThreadState, v))
   setDebugSessionId k
   logInfo $ BL8.pack $ "Registered new debug session: " <> unpack k
@@ -210,8 +208,7 @@ destroyDebugSession = do
   (sessionId, DebuggerThreadState {..}, _) <- getDebugSessionWithThreadIdAndSessionId
   store <- getAppStore
   liftIO $ do
-    killThread debuggerThread
-    killThread debuggerOutputEventThread
+    mapM_ killThread debuggerThreads
     atomically $ modifyTVar' store (H.delete sessionId)
   logInfo $ BL8.pack $ "SessionId " <> unpack sessionId <> " ended"
 ----------------------------------------------------------------------------

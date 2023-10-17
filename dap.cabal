@@ -19,7 +19,6 @@ extra-source-files:
 library
   exposed-modules:
     DAP
-  other-modules:
     DAP.Adaptor
     DAP.Event
     DAP.Internal
