@@ -155,7 +155,7 @@ defaultProgressStartEvent
   { progressStartEventProgressId  = mempty
   , progressStartEventTitle       = mempty
   , progressStartEventRequestId   = Nothing
-  , progressStartEventCancellable = False
+  , progressStartEventCancellable = Nothing
   , progressStartEventMessage     = Nothing
   , progressStartEventPercentage  = Nothing
   }

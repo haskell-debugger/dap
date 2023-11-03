@@ -2537,7 +2537,7 @@ data ProgressStartEvent
     -- If the request ID is omitted, the progress report is assumed to be
     -- related to some general activity of the debug adapter.
     --
-  , progressStartEventCancellable :: Bool
+  , progressStartEventCancellable :: Maybe Bool
     -- ^
     -- If true, the request that reports progress may be cancelled with a
     -- `cancel` request.
