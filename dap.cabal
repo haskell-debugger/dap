@@ -6,8 +6,8 @@ bug-reports:        https://github.com/haskell-debugger/dap/issues
 license:            BSD3
 license-file:       LICENSE
 author:             David Johnson, Csaba Hruska
-maintainer:         djohnson.m@gmail.com
-copyright:          (c) 2023 David Johnson
+maintainer:         code@dmj.io
+copyright:          (c) 2025 David Johnson
 category:           Debuggers, Language
 build-type:         Simple
 tested-with:        GHC==9.2.7
