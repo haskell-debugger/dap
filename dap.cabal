@@ -26,6 +26,7 @@ library
     DAP.Server
     DAP.Types
     DAP.Utils
+    DAP.Log
   build-depends:
     aeson                >= 2.0.3  && < 2.3,
     aeson-pretty         >= 0.8.9  && < 0.9,
@@ -41,7 +42,8 @@ library
     time                 >= 1.11.1 && < 1.12,
     unordered-containers >= 0.2.19 && < 0.3,
     stm                  >= 2.5.0  && < 2.6,
-    transformers-base    >= 0.4.6  && < 0.5
+    transformers-base    >= 0.4.6  && < 0.5,
+    co-log-core          >= 0.3    && < 0.4
   ghc-options:
     -Wall
   hs-source-dirs:
@@ -66,6 +68,7 @@ test-suite tests
     DAP.Types
     DAP.Event
     DAP.Utils
+    DAP.Log
   build-depends:
       aeson
     , aeson-pretty
@@ -85,6 +88,7 @@ test-suite tests
     , time
     , transformers-base
     , unordered-containers
+    , co-log-core
   default-language:
     Haskell2010
 

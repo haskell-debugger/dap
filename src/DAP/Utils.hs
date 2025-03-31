@@ -32,6 +32,7 @@ import           Data.Proxy                 (Proxy(Proxy))
 import           Data.Typeable              ( Typeable, typeRep )
 import qualified Data.ByteString.Lazy.Char8 as BL8
 import qualified Data.ByteString.Char8      as BS
+import qualified Data.Text as T
 ----------------------------------------------------------------------------
 -- | Encodes DAP protocol message appropriately
 -- >
@@ -110,6 +111,6 @@ genericParseJSONWithModifier
   }
 ----------------------------------------------------------------------------
 -- | Log formatting util
-withBraces :: BL8.ByteString -> BL8.ByteString
+withBraces :: T.Text -> T.Text
 withBraces x  = "[" <> x <> "]"
 ----------------------------------------------------------------------------
