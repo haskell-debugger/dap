@@ -81,6 +81,7 @@ module DAP.Types
   , TerminatedEvent                    (..)
   , ThreadEvent                        (..)
   , OutputEvent                        (..)
+  , OutputEventCategory                (..)
   , BreakpointEvent                    (..)
   , ModuleEvent                        (..)
   , LoadedSourceEvent                  (..)
@@ -2296,11 +2297,11 @@ instance ToJSON ThreadEventReason where
   toJSON reason = genericToJSONWithModifier reason
 ----------------------------------------------------------------------------
 data OutputEventCategory
-  = Console
-  | Important
-  | Stdout
-  | Stderr
-  | Telemetry
+  = OutputEventCategoryConsole
+  | OutputEventCategoryImportant
+  | OutputEventCategoryStdout
+  | OutputEventCategoryStderr
+  | OutputEventCategoryTelemetry
   | OutputEventCategory Text
   deriving stock (Show, Eq, Generic)
 ----------------------------------------------------------------------------
