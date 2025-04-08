@@ -106,7 +106,7 @@ main = withServer $
 --
 mockServerTalk
   :: Command
-  -> Adaptor app ()
+  -> Adaptor app Request ()
 mockServerTalk CommandInitialize = do
   sendInitializeResponse
   sendInitializedEvent

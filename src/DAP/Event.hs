@@ -50,13 +50,13 @@ module DAP.Event
 import           DAP.Types
 import           DAP.Adaptor
 ----------------------------------------------------------------------------
-sendBreakpointEvent :: BreakpointEvent -> Adaptor app ()
+sendBreakpointEvent :: BreakpointEvent -> Adaptor app Request ()
 sendBreakpointEvent = sendSuccesfulEvent EventTypeBreakpoint . setBody
 ----------------------------------------------------------------------------
-sendCapabilitiesEvent :: CapabilitiesEvent -> Adaptor app ()
+sendCapabilitiesEvent :: CapabilitiesEvent -> Adaptor app Request ()
 sendCapabilitiesEvent = sendSuccesfulEvent EventTypeCapabilities . setBody
 ----------------------------------------------------------------------------
-sendContinuedEvent :: ContinuedEvent -> Adaptor app ()
+sendContinuedEvent :: ContinuedEvent -> Adaptor app Request ()
 sendContinuedEvent = sendSuccesfulEvent EventTypeContinued . setBody
 ----------------------------------------------------------------------------
 defaultContinuedEvent :: ContinuedEvent
@@ -66,7 +66,7 @@ defaultContinuedEvent
   , continuedEventAllThreadsContinued = False
   }
 ----------------------------------------------------------------------------
-sendExitedEvent :: ExitedEvent -> Adaptor app ()
+sendExitedEvent :: ExitedEvent -> Adaptor app Request ()
 sendExitedEvent = sendSuccesfulEvent EventTypeExited . setBody
 ----------------------------------------------------------------------------
 defaultExitedEvent :: ExitedEvent
@@ -75,10 +75,10 @@ defaultExitedEvent
   { exitedEventExitCode = 0
   }
 ----------------------------------------------------------------------------
-sendInitializedEvent :: Adaptor app ()
+sendInitializedEvent :: Adaptor app Request ()
 sendInitializedEvent = sendSuccesfulEvent EventTypeInitialized (pure ())
 ----------------------------------------------------------------------------
-sendInvalidatedEvent :: InvalidatedEvent -> Adaptor app ()
+sendInvalidatedEvent :: InvalidatedEvent -> Adaptor app Request ()
 sendInvalidatedEvent = sendSuccesfulEvent EventTypeInvalidated . setBody
 ----------------------------------------------------------------------------
 defaultInvalidatedEvent :: InvalidatedEvent
@@ -90,10 +90,10 @@ defaultInvalidatedEvent
   }
 
 ----------------------------------------------------------------------------
-sendLoadedSourceEvent :: LoadedSourceEvent -> Adaptor app ()
+sendLoadedSourceEvent :: LoadedSourceEvent -> Adaptor app Request ()
 sendLoadedSourceEvent = sendSuccesfulEvent EventTypeLoadedSource . setBody
 ----------------------------------------------------------------------------
-sendMemoryEvent :: MemoryEvent -> Adaptor app ()
+sendMemoryEvent :: MemoryEvent -> Adaptor app Request ()
 sendMemoryEvent = sendSuccesfulEvent EventTypeMemory . setBody
 ----------------------------------------------------------------------------
 defaultMemoryEvent :: MemoryEvent
@@ -104,10 +104,10 @@ defaultMemoryEvent
   , memoryEventCount            = 0
   }
 ----------------------------------------------------------------------------
-sendModuleEvent :: ModuleEvent -> Adaptor app ()
+sendModuleEvent :: ModuleEvent -> Adaptor app Request ()
 sendModuleEvent = sendSuccesfulEvent EventTypeModule . setBody
 ----------------------------------------------------------------------------
-sendOutputEvent :: OutputEvent -> Adaptor app ()
+sendOutputEvent :: OutputEvent -> Adaptor app r ()
 sendOutputEvent = sendSuccesfulEvent EventTypeOutput . setBody
 ----------------------------------------------------------------------------
 defaultOutputEvent :: OutputEvent
@@ -123,7 +123,7 @@ defaultOutputEvent
   , outputEventData               = Nothing
   }
 ----------------------------------------------------------------------------
-sendProcessEvent :: ProcessEvent -> Adaptor app ()
+sendProcessEvent :: ProcessEvent -> Adaptor app Request ()
 sendProcessEvent = sendSuccesfulEvent EventTypeProcess . setBody
 ----------------------------------------------------------------------------
 defaultProcessEvent :: ProcessEvent
@@ -136,7 +136,7 @@ defaultProcessEvent
   , processEventPointerSize     = Nothing
   }
 ----------------------------------------------------------------------------
-sendProgressEndEvent :: ProgressEndEvent -> Adaptor app ()
+sendProgressEndEvent :: ProgressEndEvent -> Adaptor app Request ()
 sendProgressEndEvent = sendSuccesfulEvent EventTypeProgressEnd . setBody
 ----------------------------------------------------------------------------
 defaultProgressEndEvent :: ProgressEndEvent
@@ -146,7 +146,7 @@ defaultProgressEndEvent
   , progressEndEventMessage     = Nothing
   }
 ----------------------------------------------------------------------------
-sendProgressStartEvent :: ProgressStartEvent -> Adaptor app ()
+sendProgressStartEvent :: ProgressStartEvent -> Adaptor app Request ()
 sendProgressStartEvent = sendSuccesfulEvent EventTypeProgressStart . setBody
 ----------------------------------------------------------------------------
 defaultProgressStartEvent :: ProgressStartEvent
@@ -160,7 +160,7 @@ defaultProgressStartEvent
   , progressStartEventPercentage  = Nothing
   }
 ----------------------------------------------------------------------------
-sendProgressUpdateEvent :: ProgressUpdateEvent -> Adaptor app ()
+sendProgressUpdateEvent :: ProgressUpdateEvent -> Adaptor app Request ()
 sendProgressUpdateEvent = sendSuccesfulEvent EventTypeProgressUpdate . setBody
 ----------------------------------------------------------------------------
 defaultProgressUpdateEvent :: ProgressUpdateEvent
@@ -171,7 +171,7 @@ defaultProgressUpdateEvent
   , progressUpdateEventPercentage = Nothing
   }
 ----------------------------------------------------------------------------
-sendStoppedEvent :: StoppedEvent -> Adaptor app ()
+sendStoppedEvent :: StoppedEvent -> Adaptor app Request ()
 sendStoppedEvent = sendSuccesfulEvent EventTypeStopped . setBody
 ----------------------------------------------------------------------------
 defaultStoppedEvent :: StoppedEvent
@@ -186,7 +186,7 @@ defaultStoppedEvent
   , stoppedEventHitBreakpointIds  = []
   }
 ----------------------------------------------------------------------------
-sendTerminatedEvent :: TerminatedEvent -> Adaptor app ()
+sendTerminatedEvent :: TerminatedEvent -> Adaptor app Request ()
 sendTerminatedEvent = sendSuccesfulEvent EventTypeTerminated . setBody
 ----------------------------------------------------------------------------
 defaultTerminatedEvent :: TerminatedEvent
@@ -195,7 +195,7 @@ defaultTerminatedEvent
   { terminatedEventRestart = False
   }
 ----------------------------------------------------------------------------
-sendThreadEvent :: ThreadEvent -> Adaptor app ()
+sendThreadEvent :: ThreadEvent -> Adaptor app Request ()
 sendThreadEvent = sendSuccesfulEvent EventTypeThread . setBody
 ----------------------------------------------------------------------------
 defaultThreadEvent :: ThreadEvent

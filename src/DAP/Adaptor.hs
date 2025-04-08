@@ -50,15 +50,16 @@ module DAP.Adaptor
   -- * Internal function used to execute actions on behalf of the DAP server
   -- from child threads (useful for handling asynchronous debugger events).
   , runAdaptorWith
+  , runAdaptor
   ) where
 ----------------------------------------------------------------------------
-import           Control.Concurrent.MVar    ( modifyMVar_, MVar )
 import           Control.Concurrent.Lifted  ( fork, killThread )
 import           Control.Exception          ( throwIO )
 import           Control.Concurrent.STM     ( atomically, readTVarIO, modifyTVar' )
 import           Control.Monad              ( when, unless )
 import           Control.Monad.Except       ( runExceptT, throwError )
-import           Control.Monad.State        ( runStateT, gets, MonadIO(liftIO), gets, modify' )
+import           Control.Monad.State        ( runStateT, gets, gets, modify' )
+import Control.Monad.Reader
 import           Data.Aeson                 ( FromJSON, Result (..), fromJSON )
 import           Data.Aeson.Encode.Pretty   ( encodePretty )
 import           Data.Aeson.Types           ( object, Key, KeyValue((.=)), ToJSON )
@@ -68,23 +69,24 @@ import           System.IO                  ( Handle )
 import qualified Data.ByteString.Lazy.Char8 as BL8
 import qualified Data.ByteString.Char8      as BS
 import qualified Data.HashMap.Strict        as H
+import Data.IORef
 ----------------------------------------------------------------------------
 import           DAP.Types
 import           DAP.Utils
 import           DAP.Internal
 ----------------------------------------------------------------------------
-logWarn :: BL8.ByteString -> Adaptor app ()
+logWarn :: BL8.ByteString -> Adaptor app r ()
 logWarn msg = logWithAddr WARN Nothing (withBraces msg)
 ----------------------------------------------------------------------------
-logError :: BL8.ByteString -> Adaptor app ()
+logError :: BL8.ByteString -> Adaptor app r ()
 logError msg = logWithAddr ERROR Nothing (withBraces msg)
 ----------------------------------------------------------------------------
-logInfo :: BL8.ByteString -> Adaptor app ()
+logInfo :: BL8.ByteString -> Adaptor app r ()
 logInfo msg = logWithAddr INFO Nothing (withBraces msg)
 ----------------------------------------------------------------------------
 -- | Meant for internal consumption, used to signify a message has been
 -- SENT from the server
-debugMessage :: BL8.ByteString -> Adaptor app ()
+debugMessage :: BL8.ByteString -> Adaptor app r ()
 debugMessage msg = do
   shouldLog <- getDebugLogging
   addr <- getAddress
@@ -93,7 +95,7 @@ debugMessage msg = do
     $ logger DEBUG addr (Just SENT) msg
 ----------------------------------------------------------------------------
 -- | Meant for external consumption
-logWithAddr :: Level -> Maybe DebugStatus -> BL8.ByteString -> Adaptor app ()
+logWithAddr :: Level -> Maybe DebugStatus -> BL8.ByteString -> Adaptor app r ()
 logWithAddr level status msg = do
   addr <- getAddress
   liftIO (logger level addr status msg)
@@ -113,24 +115,26 @@ logger level addr maybeDebug msg = do
       , msg
       ]
 ----------------------------------------------------------------------------
-getDebugLogging :: Adaptor app Bool
-getDebugLogging = gets (debugLogging . serverConfig)
+getDebugLogging :: Adaptor app r Bool
+getDebugLogging = asks (debugLogging . serverConfig)
 ----------------------------------------------------------------------------
-getServerCapabilities :: Adaptor app Capabilities
-getServerCapabilities = gets (serverCapabilities . serverConfig)
+getServerCapabilities :: Adaptor app r Capabilities
+getServerCapabilities = asks (serverCapabilities . serverConfig)
 ----------------------------------------------------------------------------
-getAddress :: Adaptor app SockAddr
-getAddress = gets address
+getAddress :: Adaptor app r SockAddr
+getAddress = asks address
 ----------------------------------------------------------------------------
-getHandle :: Adaptor app Handle
-getHandle = gets handle
+getHandle :: Adaptor app r Handle
+getHandle = asks handle
 ----------------------------------------------------------------------------
-getRequestSeqNum :: Adaptor app Seq
-getRequestSeqNum = gets (requestSeqNum . request)
+getRequestSeqNum :: Adaptor app Request Seq
+getRequestSeqNum = asks (requestSeqNum . request)
 ----------------------------------------------------------------------------
-getDebugSessionId :: Adaptor app SessionId
+getDebugSessionId :: Adaptor app r SessionId
 getDebugSessionId = do
-  gets sessionId >>= \case
+  var <- asks (sessionId)
+  res <- liftIO $ readIORef var
+  case res of
     Nothing -> sessionNotFound
     Just sessionId -> pure sessionId
   where
@@ -138,13 +142,15 @@ getDebugSessionId = do
       let err = "No Debug Session has started"
       sendError (ErrorMessage (pack err)) Nothing
 ----------------------------------------------------------------------------
-setDebugSessionId :: SessionId -> Adaptor app ()
-setDebugSessionId session = modify' $ \s -> s { sessionId = Just session }
+setDebugSessionId :: SessionId -> Adaptor app r ()
+setDebugSessionId session = do
+  var <- asks sessionId
+  liftIO $ writeIORef var (Just session)
 ----------------------------------------------------------------------------
 registerNewDebugSession
   :: SessionId
   -> app
-  -> [((Adaptor app () -> IO ()) -> IO ())]
+  -> [(Adaptor app () () -> IO ()) -> IO ()]
   -- ^ Actions to run debugger (operates in a forked thread that gets killed when disconnect is set)
   -- Long running operation, meant to be used as a sink for
   -- the debugger to emit events and for the adaptor to forward to the editor
@@ -161,29 +167,32 @@ registerNewDebugSession
   -- >     withAdaptor $ sendOutputEvent defaultOutputEvent { outputEventOutput = output }
   -- >   ]
   --
-  -> Adaptor app ()
+  -> Adaptor app r ()
 registerNewDebugSession k v debuggerConcurrentActions = do
-  store <- gets appStore
-  adaptorStateMVar <- gets adaptorStateMVar
+  store <- asks appStore
+  lcl <- ask
+  let lcl' = lcl { request = () }
+  let emptyState = AdaptorState MessageTypeEvent []
   debuggerThreadState <- liftIO $
     DebuggerThreadState
-      <$> sequence [fork $ action (runAdaptorWith adaptorStateMVar) | action <- debuggerConcurrentActions]
+      <$> sequence [fork $ action (runAdaptorWith lcl' emptyState "s") | action <- debuggerConcurrentActions]
   liftIO . atomically $ modifyTVar' store (H.insert k (debuggerThreadState, v))
-  setDebugSessionId k
   logInfo $ BL8.pack $ "Registered new debug session: " <> unpack k
+  setDebugSessionId k
+
 ----------------------------------------------------------------------------
-updateDebugSession :: (app -> app) -> Adaptor app ()
+updateDebugSession :: (app -> app) -> Adaptor app r ()
 updateDebugSession updateFun = do
   sessionId <- getDebugSessionId
-  store <- gets appStore
+  store <- asks appStore
   liftIO . atomically $ modifyTVar' store (H.adjust (fmap updateFun) sessionId)
 ----------------------------------------------------------------------------
-getDebugSession :: Adaptor a a
+getDebugSession :: Adaptor a r a
 getDebugSession = do
   (_, _, app) <- getDebugSessionWithThreadIdAndSessionId
   pure app
 ----------------------------------------------------------------------------
-getDebugSessionWithThreadIdAndSessionId :: Adaptor app (SessionId, DebuggerThreadState, app)
+getDebugSessionWithThreadIdAndSessionId :: Adaptor app r (SessionId, DebuggerThreadState, app)
 getDebugSessionWithThreadIdAndSessionId = do
   sessionId <- getDebugSessionId
   appStore <- liftIO . readTVarIO =<< getAppStore
@@ -203,7 +212,7 @@ getDebugSessionWithThreadIdAndSessionId = do
 -- | Whenever a debug Session ends (cleanly or otherwise) this function
 -- will remove the local debugger communication state from the global state
 ----------------------------------------------------------------------------
-destroyDebugSession :: Adaptor app ()
+destroyDebugSession :: Adaptor app r ()
 destroyDebugSession = do
   (sessionId, DebuggerThreadState {..}, _) <- getDebugSessionWithThreadIdAndSessionId
   store <- getAppStore
@@ -212,17 +221,17 @@ destroyDebugSession = do
     atomically $ modifyTVar' store (H.delete sessionId)
   logInfo $ BL8.pack $ "SessionId " <> unpack sessionId <> " ended"
 ----------------------------------------------------------------------------
-getAppStore :: Adaptor app (AppStore app)
-getAppStore = gets appStore
+getAppStore :: Adaptor app r (AppStore app)
+getAppStore = asks appStore
 ----------------------------------------------------------------------------
-getCommand :: Adaptor app Command
-getCommand = command <$> gets request
+getCommand :: Adaptor app Request Command
+getCommand = command <$> asks request
 ----------------------------------------------------------------------------
 -- | 'sendRaw' (internal use only)
 -- Sends a raw JSON payload to the editor. No "seq", "type" or "command" fields are set.
 -- The message is still encoded with the ProtocolMessage Header, byte count, and CRLF.
 --
-sendRaw :: ToJSON value => value -> Adaptor app ()
+sendRaw :: ToJSON value => value -> Adaptor app r ()
 sendRaw value = do
   handle        <- getHandle
   address       <- getAddress
@@ -234,7 +243,7 @@ sendRaw value = do
 -- i.e. "request_seq" and "command".
 -- We also have to be sure to reset the message payload
 ----------------------------------------------------------------------------
-send :: Adaptor app () -> Adaptor app ()
+send :: Adaptor app Request () -> Adaptor app Request ()
 send action = do
   ()            <- action
   cmd           <- getCommand
@@ -258,9 +267,28 @@ send action = do
 
   -- Send payload to client from debug adaptor
   writeToHandle address handle payload
-
-  -- Reset payload each time a send occurs
   resetAdaptorStatePayload
+
+sendEvent :: Adaptor app r () -> Adaptor app r ()
+sendEvent action = do
+  () <- action
+  handle        <- getHandle
+  messageType   <- gets messageType
+  address       <- getAddress
+  case messageType of
+    MessageTypeResponse -> error "use send"
+    MessageTypeRequest -> error "use send"
+    MessageTypeEvent -> do
+      address       <- getAddress
+      setField "type" messageType
+
+  -- Once all fields are set, fetch the payload for sending
+  payload <- object <$> gets payload
+  -- Send payload to client from debug adaptor
+  writeToHandle address handle payload
+  resetAdaptorStatePayload
+
+
 ----------------------------------------------------------------------------
 -- | Writes payload to the given 'Handle' using the local connection lock
 ----------------------------------------------------------------------------
@@ -269,7 +297,7 @@ writeToHandle
   => SockAddr
   -> Handle
   -> event
-  -> Adaptor app ()
+  -> Adaptor app r ()
 writeToHandle _ handle evt = do
   let msg = encodeBaseProtocolMessage evt
   debugMessage ("\n" <> encodePretty evt)
@@ -277,23 +305,23 @@ writeToHandle _ handle evt = do
 ----------------------------------------------------------------------------
 -- | Resets Adaptor's payload
 ----------------------------------------------------------------------------
-resetAdaptorStatePayload :: Adaptor app ()
+resetAdaptorStatePayload :: Adaptor app r ()
 resetAdaptorStatePayload = modify' $ \s -> s { payload = [] }
 ----------------------------------------------------------------------------
-sendSuccesfulResponse :: Adaptor app () -> Adaptor app ()
+sendSuccesfulResponse :: Adaptor app Request () -> Adaptor app Request ()
 sendSuccesfulResponse action = do
  send $ do
     setType MessageTypeResponse
     setSuccess True
     action
 ----------------------------------------------------------------------------
-sendSuccesfulEmptyResponse :: Adaptor app ()
+sendSuccesfulEmptyResponse :: Adaptor app Request ()
 sendSuccesfulEmptyResponse = sendSuccesfulResponse (pure ())
 ----------------------------------------------------------------------------
 -- | Sends successful event
-sendSuccesfulEvent :: EventType -> Adaptor app () -> Adaptor app ()
+sendSuccesfulEvent :: EventType -> Adaptor app r () -> Adaptor app r ()
 sendSuccesfulEvent event action = do
-  send $ do
+  sendEvent $ do
     setEvent event
     setType MessageTypeEvent
     action
@@ -305,7 +333,7 @@ sendSuccesfulEvent event action = do
 sendError
   :: ErrorMessage
   -> Maybe Message
-  -> Adaptor app a
+  -> Adaptor app r a
 sendError errorMessage maybeMessage = do
   throwError (errorMessage, maybeMessage)
 ----------------------------------------------------------------------------
@@ -314,7 +342,7 @@ sendError errorMessage maybeMessage = do
 sendErrorResponse
   :: ErrorMessage
   -> Maybe Message
-  -> Adaptor app ()
+  -> Adaptor app Request ()
 sendErrorResponse errorMessage maybeMessage = do
   send $ do
     setType MessageTypeResponse
@@ -324,24 +352,24 @@ sendErrorResponse errorMessage maybeMessage = do
 ----------------------------------------------------------------------------
 setErrorMessage
   :: ErrorMessage
-  -> Adaptor app ()
+  -> Adaptor app r ()
 setErrorMessage v = setField "message" v
 ----------------------------------------------------------------------------
 -- | Sends successful event
 setSuccess
   :: Bool
-  -> Adaptor app ()
+  -> Adaptor app r ()
 setSuccess = setField "success"
 ----------------------------------------------------------------------------
 setBody
   :: ToJSON value
   => value
-  -> Adaptor app ()
+  -> Adaptor app r ()
 setBody value = setField "body" value
 ----------------------------------------------------------------------------
 setType
   :: MessageType
-  -> Adaptor app ()
+  -> Adaptor app r ()
 setType messageType = do
   modify' $ \adaptorState ->
     adaptorState
@@ -350,14 +378,14 @@ setType messageType = do
 ----------------------------------------------------------------------------
 setEvent
   :: EventType
-  -> Adaptor app ()
+  -> Adaptor app r ()
 setEvent = setField "event"
 ----------------------------------------------------------------------------
 setField
   :: ToJSON value
   => Key
   -> value
-  -> Adaptor app ()
+  -> Adaptor app r ()
 setField key value = do
   currentPayload <- gets payload
   modify' $ \adaptorState ->
@@ -367,18 +395,18 @@ setField key value = do
 ----------------------------------------------------------------------------
 withConnectionLock
   :: IO ()
-  -> Adaptor app ()
+  -> Adaptor app r ()
 withConnectionLock action = do
-  lock <- gets handleLock
+  lock <- asks handleLock
   liftIO (withLock lock action)
 ----------------------------------------------------------------------------
 -- | Attempt to parse arguments from the Request
 ----------------------------------------------------------------------------
 getArguments
   :: (Show value, FromJSON value)
-  => Adaptor app value
+  => Adaptor app Request value
 getArguments = do
-  maybeArgs <- gets (args . request)
+  maybeArgs <- asks (args . request)
   let msg = "No args found for this message"
   case maybeArgs of
     Nothing -> do
@@ -393,15 +421,16 @@ getArguments = do
 
 ----------------------------------------------------------------------------
 -- | Evaluates Adaptor action by using and updating the state in the MVar
-runAdaptorWith :: MVar (AdaptorState app) -> Adaptor app () -> IO ()
-runAdaptorWith adaptorStateMVar action = do
-  modifyMVar_ adaptorStateMVar (flip runAdaptor (resetAdaptorStatePayload >> action))
+runAdaptorWith :: AdaptorLocal app r -> AdaptorState -> String -> Adaptor app r () -> IO ()
+runAdaptorWith lcl st s (Adaptor action) = do
+  runStateT (runReaderT (runExceptT action) lcl) st
+  return ()
 
 ----------------------------------------------------------------------------
 -- | Utility for evaluating a monad transformer stack
-runAdaptor :: AdaptorState app -> Adaptor app () -> IO (AdaptorState app)
-runAdaptor adaptorState (Adaptor client) =
-  runStateT (runExceptT client) adaptorState >>= \case
-    (Left (errorMessage, maybeMessage), nextState) ->
-      runAdaptor nextState (sendErrorResponse errorMessage maybeMessage)
-    (Right (), nextState) -> pure nextState
+runAdaptor :: AdaptorLocal app Request -> AdaptorState -> Adaptor app Request () -> IO ()
+runAdaptor lcl s (Adaptor client) =
+  runStateT (runReaderT (runExceptT client) lcl) s >>= \case
+    (Left (errorMessage, maybeMessage), s') ->
+      runAdaptor lcl s' (sendErrorResponse errorMessage maybeMessage)
+    (Right (), s') -> pure ()

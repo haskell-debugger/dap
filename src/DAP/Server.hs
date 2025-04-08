@@ -21,10 +21,8 @@ module DAP.Server
   , readPayload
   ) where
 ----------------------------------------------------------------------------
-import           Control.Concurrent.MVar    ( MVar )
 import           Control.Monad              ( when )
-import           Control.Concurrent.MVar    ( newMVar, newEmptyMVar, modifyMVar_
-                                            , putMVar, readMVar )
+import           Control.Concurrent.MVar    ( newMVar )
 import           Control.Concurrent.STM     ( newTVarIO )
 import           Control.Exception          ( SomeException
                                             , IOException
@@ -32,7 +30,6 @@ import           Control.Exception          ( SomeException
                                             , fromException
                                             , throwIO )
 import           Control.Monad              ( void )
-import           Control.Monad.State        ( gets )
 import           Data.Aeson                 ( decodeStrict, eitherDecode, Value, FromJSON )
 import           Data.Aeson.Encode.Pretty   ( encodePretty )
 import           Data.ByteString            ( ByteString )
@@ -51,11 +48,12 @@ import           DAP.Types
 import           DAP.Internal
 import           DAP.Utils
 import           DAP.Adaptor
+import Data.IORef
 ----------------------------------------------------------------------------
 runDAPServer
   :: ServerConfig
   -- ^ Top-level Server configuration, global across all debug sessions
-  -> (Command -> Adaptor app ())
+  -> (Command -> Adaptor app Request ())
   -- ^ A function to facilitate communication between DAP clients, debug adaptors and debuggers
   -> IO ()
 runDAPServer serverConfig@ServerConfig {..} communicate = withSocketsDo $ do
@@ -67,8 +65,7 @@ runDAPServer serverConfig@ServerConfig {..} communicate = withSocketsDo $ do
         putStrLn $ "TCP connection established from " ++ show address
     handle <- socketToHandle socket ReadWriteMode
     hSetNewlineMode handle NewlineMode { inputNL = CRLF, outputNL = CRLF }
-    request <- getRequest handle address serverConfig
-    adaptorStateMVar <- initAdaptorState handle address appStore serverConfig request
+    adaptorStateMVar <- initAdaptorState handle address appStore serverConfig
     serviceClient communicate adaptorStateMVar `catch` exceptionHandler handle address debugLogging
 
 -- | Initializes the Adaptor
@@ -78,39 +75,32 @@ initAdaptorState
   -> SockAddr
   -> AppStore app
   -> ServerConfig
-  -> Request
-  -> IO (MVar (AdaptorState app))
-initAdaptorState handle address appStore serverConfig request = do
+  -> IO (AdaptorLocal app ())
+initAdaptorState handle address appStore serverConfig = do
   handleLock               <- newMVar ()
-  sessionId                <- pure Nothing
-  adaptorStateMVar         <- newEmptyMVar
-  putMVar adaptorStateMVar AdaptorState
-    { messageType = MessageTypeResponse
-    , payload = []
-    , ..
+  sessionId                <- newIORef Nothing
+  let request = ()
+  pure $ AdaptorLocal
+    { ..
     }
-  pure adaptorStateMVar
 ----------------------------------------------------------------------------
 -- | Communication loop between editor and adaptor
 -- Evaluates the current 'Request' located in the 'AdaptorState'
 -- Fetches, updates and recurses on the next 'Request'
 --
 serviceClient
-  :: (Command -> Adaptor app ())
-  -> MVar (AdaptorState app)
+  :: (Command -> Adaptor app Request ())
+  -> AdaptorLocal app r
   -> IO ()
-serviceClient communicate adaptorStateMVar = do
-  runAdaptorWith adaptorStateMVar $ do
-    request <- gets request
-    communicate (command request)
-
-  -- HINT: getRequest is a blocking action so we use readMVar to leave MVar available
-  AdaptorState { address, handle, serverConfig } <- readMVar adaptorStateMVar
+serviceClient communicate lcl = do
+  let AdaptorLocal { address, handle, serverConfig } = lcl
   nextRequest <- getRequest handle address serverConfig
-  modifyMVar_ adaptorStateMVar $ \s -> pure s { request = nextRequest }
+  let st = AdaptorState MessageTypeResponse []
+  let lcl' = lcl { request = nextRequest }
+  runAdaptorWith lcl' st "" (communicate (command nextRequest))
 
   -- loop: serve the next request
-  serviceClient communicate adaptorStateMVar
+  serviceClient communicate lcl
 
 ----------------------------------------------------------------------------
 -- | Handle exceptions from client threads, parse and log accordingly
