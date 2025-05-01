@@ -97,6 +97,7 @@ module DAP.Types
     -- * Client
   , Adaptor                            (..)
   , AdaptorState                       (..)
+  , AdaptorLocal(..)
   , AppStore
     -- * Errors
   , AdaptorException                   (..)
@@ -202,16 +203,20 @@ module DAP.Types
   , DebuggerThreadState (..)
   ) where
 ----------------------------------------------------------------------------
+import           Control.Applicative             ( (<|>) )
 import           Control.Monad.Base              ( MonadBase )
 import           Control.Monad.Except            ( MonadError, ExceptT )
 import           Control.Monad.Trans.Control     ( MonadBaseControl )
 import           Control.Concurrent              ( ThreadId )
 import           Control.Concurrent.MVar         ( MVar )
-import           Control.Applicative             ( (<|>) )
+import           Control.Monad.IO.Class          ( MonadIO )
+import           Control.Monad.Reader            ( MonadReader, ReaderT )
+import           Control.Monad.State             ( MonadState, StateT )
+import           Data.IORef                      ( IORef )
 import           Data.Typeable                   ( typeRep )
 import           Control.Concurrent.STM          ( TVar )
 import           Control.Exception               ( Exception )
-import           Control.Monad.State             ( StateT, MonadState, MonadIO )
+import           Control.Monad.Reader            ( )
 import           Data.Aeson                      ( (.:), (.:?), withObject, withText, object
                                                  , FromJSON(parseJSON), Value, KeyValue((.=))
                                                  , ToJSON(toJSON), genericParseJSON, defaultOptions
@@ -235,18 +240,19 @@ import           DAP.Utils                       ( capitalize, getName, genericP
 -- the current event / response being constructed and the type of the message.
 -- Of note: A 'StateT' is used because 'adaptorPayload' should not be shared
 -- with other threads.
-newtype Adaptor store a =
-    Adaptor (ExceptT (ErrorMessage, Maybe Message) (StateT (AdaptorState store) IO) a)
+newtype Adaptor store r a =
+    Adaptor (ExceptT (ErrorMessage, Maybe Message) (ReaderT (AdaptorLocal store r) (StateT AdaptorState IO)) a)
   deriving newtype
     ( Monad
-    , MonadIO, Applicative, Functor, MonadState (AdaptorState store)
+    , MonadIO, Applicative, Functor, MonadReader (AdaptorLocal store r)
+    , MonadState AdaptorState
     , MonadBaseControl IO
     , MonadError (ErrorMessage, Maybe Message)
     , MonadBase IO
     )
 ----------------------------------------------------------------------------
 -- | The adaptor state is local to a single connection / thread
-data AdaptorState app
+data AdaptorState
   = AdaptorState
   { messageType  :: MessageType
     -- ^ Current message type being created
@@ -258,7 +264,12 @@ data AdaptorState app
     -- This should never be manually modified by the end user
     -- The payload is accumulated automatically by usage of the API
     --
-  , appStore     :: AppStore app
+    --
+  }
+----------------------------------------------------------------------------
+-- | The adaptor local config
+data AdaptorLocal app request = AdaptorLocal
+  { appStore     :: AppStore app
     -- ^ Global app store, accessible on a per session basis
     -- Initialized during 'attach' sessions
     --
@@ -269,23 +280,20 @@ data AdaptorState app
   , handle              :: Handle
     -- ^ Connection Handle
     --
-  , request             :: Request
-    -- ^ Connection Request information
     --
   , address             :: SockAddr
     -- ^ Address of Connection
     --
-  , sessionId           :: Maybe SessionId
+  , sessionId           :: IORef (Maybe SessionId)
     -- ^ Session ID
     -- Local to the current connection's debugger session
-    --
-  , adaptorStateMVar    :: MVar (AdaptorState app)
-    -- ^ Shared state for serializable concurrency
     --
   , handleLock          :: MVar ()
     -- ^ A lock for writing to a Handle. One lock is created per connection
     -- and exists for the duration of that connection
     --
+  , request             :: request
+    -- ^ Connection Request information, if we are responding to a request.
   }
 
 ----------------------------------------------------------------------------
@@ -296,7 +304,7 @@ type SessionId = Text
 -- allows initalized debuggers to emit custom events
 -- when they receive messages from the debugger
 type AppStore app = TVar (H.HashMap SessionId (DebuggerThreadState, app))
-
+----------------------------------------------------------------------------
 -- | 'DebuggerThreadState'
 -- State to hold both the thread that executes the debugger and the thread used
 -- to propagate output events from the debugger + debuggee to the editor (via the
@@ -305,7 +313,6 @@ data DebuggerThreadState
   = DebuggerThreadState
   { debuggerThreads :: [ThreadId]
   }
-
 ----------------------------------------------------------------------------
 data ServerConfig
   = ServerConfig
@@ -4027,3 +4034,4 @@ data Level = DEBUG | INFO | WARN | ERROR
 ----------------------------------------------------------------------------
 data DebugStatus = SENT | RECEIVED
   deriving (Show, Eq)
+----------------------------------------------------------------------------
