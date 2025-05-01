@@ -34,6 +34,7 @@ import           Data.Aeson                 ( decodeStrict, eitherDecode, Value,
 import           Data.Aeson.Encode.Pretty   ( encodePretty )
 import           Data.ByteString            ( ByteString )
 import           Data.Char                  ( isDigit )
+import           Data.IORef                 ( newIORef )
 import           Network.Simple.TCP         ( serve, HostPreference(Host) )
 import           Network.Socket             ( socketToHandle, withSocketsDo, SockAddr )
 import           System.IO                  ( hClose, hSetNewlineMode, Handle, Newline(CRLF)
@@ -48,7 +49,6 @@ import           DAP.Types
 import           DAP.Internal
 import           DAP.Utils
 import           DAP.Adaptor
-import Data.IORef
 ----------------------------------------------------------------------------
 runDAPServer
   :: ServerConfig
@@ -80,7 +80,7 @@ initAdaptorState handle address appStore serverConfig = do
   handleLock               <- newMVar ()
   sessionId                <- newIORef Nothing
   let request = ()
-  pure $ AdaptorLocal
+  pure AdaptorLocal
     { ..
     }
 ----------------------------------------------------------------------------
@@ -97,11 +97,8 @@ serviceClient communicate lcl = do
   nextRequest <- getRequest handle address serverConfig
   let st = AdaptorState MessageTypeResponse []
   let lcl' = lcl { request = nextRequest }
-  runAdaptorWith lcl' st "" (communicate (command nextRequest))
-
-  -- loop: serve the next request
+  runAdaptorWith lcl' st (communicate (command nextRequest))
   serviceClient communicate lcl
-
 ----------------------------------------------------------------------------
 -- | Handle exceptions from client threads, parse and log accordingly
 exceptionHandler :: Handle -> SockAddr -> Bool -> SomeException -> IO ()
@@ -159,7 +156,7 @@ parseHeader bytes = do
       pure (Right contentLength)
     Nothing ->
       pure $ Left ("Invalid payload: " <> BS.unpack bytes)
-
+----------------------------------------------------------------------------
 -- | Helper function to parse a 'ProtocolMessage', extracting it's body.
 -- used for testing.
 --
@@ -172,3 +169,4 @@ readPayload handle = do
     Right count -> do
       body <- BS.hGet handle count
       pure $ eitherDecode (BL8.fromStrict body)
+----------------------------------------------------------------------------

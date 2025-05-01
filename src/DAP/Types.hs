@@ -203,17 +203,20 @@ module DAP.Types
   , DebuggerThreadState (..)
   ) where
 ----------------------------------------------------------------------------
+import           Control.Applicative             ( (<|>) )
 import           Control.Monad.Base              ( MonadBase )
 import           Control.Monad.Except            ( MonadError, ExceptT )
 import           Control.Monad.Trans.Control     ( MonadBaseControl )
 import           Control.Concurrent              ( ThreadId )
 import           Control.Concurrent.MVar         ( MVar )
-import Data.IORef
-import           Control.Applicative             ( (<|>) )
+import           Control.Monad.IO.Class          ( MonadIO )
+import           Control.Monad.Reader            ( MonadReader, ReaderT )
+import           Control.Monad.State             ( MonadState, StateT )
+import           Data.IORef                      ( IORef )
 import           Data.Typeable                   ( typeRep )
 import           Control.Concurrent.STM          ( TVar )
 import           Control.Exception               ( Exception )
-import Control.Monad.Reader
+import           Control.Monad.Reader            ( )
 import           Data.Aeson                      ( (.:), (.:?), withObject, withText, object
                                                  , FromJSON(parseJSON), Value, KeyValue((.=))
                                                  , ToJSON(toJSON), genericParseJSON, defaultOptions
@@ -229,7 +232,6 @@ import           Text.Read                       ( readMaybe )
 import           Data.Text                       (Text)
 import qualified Data.Text                       as T ( pack, unpack )
 import qualified Data.HashMap.Strict             as H
-import Control.Monad.State
 ----------------------------------------------------------------------------
 import           DAP.Utils                       ( capitalize, getName, genericParseJSONWithModifier, genericToJSONWithModifier )
 ----------------------------------------------------------------------------
@@ -264,7 +266,9 @@ data AdaptorState
     --
     --
   }
-data AdaptorLocal app r = AdaptorLocal
+----------------------------------------------------------------------------
+-- | The adaptor local config
+data AdaptorLocal app request = AdaptorLocal
   { appStore     :: AppStore app
     -- ^ Global app store, accessible on a per session basis
     -- Initialized during 'attach' sessions
@@ -288,7 +292,7 @@ data AdaptorLocal app r = AdaptorLocal
     -- ^ A lock for writing to a Handle. One lock is created per connection
     -- and exists for the duration of that connection
     --
-  , request             :: r
+  , request             :: request
     -- ^ Connection Request information, if we are responding to a request.
   }
 
@@ -300,7 +304,7 @@ type SessionId = Text
 -- allows initalized debuggers to emit custom events
 -- when they receive messages from the debugger
 type AppStore app = TVar (H.HashMap SessionId (DebuggerThreadState, app))
-
+----------------------------------------------------------------------------
 -- | 'DebuggerThreadState'
 -- State to hold both the thread that executes the debugger and the thread used
 -- to propagate output events from the debugger + debuggee to the editor (via the
@@ -309,7 +313,6 @@ data DebuggerThreadState
   = DebuggerThreadState
   { debuggerThreads :: [ThreadId]
   }
-
 ----------------------------------------------------------------------------
 data ServerConfig
   = ServerConfig
@@ -4031,3 +4034,4 @@ data Level = DEBUG | INFO | WARN | ERROR
 ----------------------------------------------------------------------------
 data DebugStatus = SENT | RECEIVED
   deriving (Show, Eq)
+----------------------------------------------------------------------------

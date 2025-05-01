@@ -107,7 +107,7 @@ defaultMemoryEvent
 sendModuleEvent :: ModuleEvent -> Adaptor app Request ()
 sendModuleEvent = sendSuccesfulEvent EventTypeModule . setBody
 ----------------------------------------------------------------------------
-sendOutputEvent :: OutputEvent -> Adaptor app r ()
+sendOutputEvent :: OutputEvent -> Adaptor app request ()
 sendOutputEvent = sendSuccesfulEvent EventTypeOutput . setBody
 ----------------------------------------------------------------------------
 defaultOutputEvent :: OutputEvent
