@@ -99,6 +99,7 @@ module DAP.Types
   , AdaptorState                       (..)
   , AdaptorLocal(..)
   , AppStore
+  , MonadIO(..)
     -- * Errors
   , AdaptorException                   (..)
   , ErrorMessage                       (..)
@@ -196,9 +197,6 @@ module DAP.Types
   , defaultValueFormat
   , defaultVariable
   , defaultVariablePresentationHint
-    -- * Log level
-  , Level (..)
-  , DebugStatus (..)
   -- * Debug Thread state
   , DebuggerThreadState (..)
   ) where
@@ -230,10 +228,12 @@ import           Network.Socket                  ( SockAddr )
 import           System.IO                       ( Handle )
 import           Text.Read                       ( readMaybe )
 import           Data.Text                       (Text)
-import qualified Data.Text                       as T ( pack, unpack )
+import qualified Data.Text                       as T ( pack, unpack , Text)
 import qualified Data.HashMap.Strict             as H
+import Colog.Core
 ----------------------------------------------------------------------------
 import           DAP.Utils                       ( capitalize, getName, genericParseJSONWithModifier, genericToJSONWithModifier )
+import DAP.Log
 ----------------------------------------------------------------------------
 -- | Core type for Debug Adaptor to send and receive messages in a type safe way.
 -- the state is 'AdaptorState' which holds configuration information, along with
@@ -291,6 +291,8 @@ data AdaptorLocal app request = AdaptorLocal
   , handleLock          :: MVar ()
     -- ^ A lock for writing to a Handle. One lock is created per connection
     -- and exists for the duration of that connection
+  , logAction          :: LogAction IO DAPLog
+    -- ^ Where to send log output
     --
   , request             :: request
     -- ^ Connection Request information, if we are responding to a request.
@@ -325,9 +327,9 @@ data ServerConfig
 -- | Used to signify a malformed message has been received
 data AdaptorException
   = ParseException String
-  | ExpectedArguments String
-  | DebugSessionIdException String
-  | DebuggerException String
+  | ExpectedArguments T.Text
+  | DebugSessionIdException T.Text
+  | DebuggerException T.Text
   deriving stock (Show, Eq)
   deriving anyclass Exception
 ----------------------------------------------------------------------------
@@ -4028,10 +4030,3 @@ data ThreadsArguments = ThreadsArguments
 ----------------------------------------------------------------------------
 instance FromJSON ThreadsArguments where
    parseJSON _ = pure ThreadsArguments
-----------------------------------------------------------------------------
-data Level = DEBUG | INFO | WARN | ERROR
-  deriving (Show, Eq)
-----------------------------------------------------------------------------
-data DebugStatus = SENT | RECEIVED
-  deriving (Show, Eq)
-----------------------------------------------------------------------------

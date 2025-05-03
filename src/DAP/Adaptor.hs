@@ -6,6 +6,7 @@
 -- Stability   :  experimental
 -- Portability :  non-portable
 ----------------------------------------------------------------------------
+{-# LANGUAGE CPP                        #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE DerivingStrategies         #-}
 {-# LANGUAGE OverloadedStrings          #-}
@@ -13,6 +14,7 @@
 {-# LANGUAGE DeriveAnyClass             #-}
 {-# LANGUAGE DeriveGeneric              #-}
 {-# LANGUAGE LambdaCase                 #-}
+{-# LANGUAGE OverloadedStrings          #-}
 ----------------------------------------------------------------------------
 module DAP.Adaptor
   ( -- * Message Construction
@@ -51,16 +53,18 @@ module DAP.Adaptor
   -- from child threads (useful for handling asynchronous debugger events).
   , runAdaptorWith
   , runAdaptor
+  , withRequest
+  , getHandle
   ) where
 ----------------------------------------------------------------------------
 import           Control.Concurrent.Lifted  ( fork, killThread )
 import           Control.Exception          ( throwIO )
 import           Control.Concurrent.STM     ( atomically, readTVarIO, modifyTVar' )
-import           Control.Monad              ( when, unless, void )
-import           Control.Monad.Except       ( runExceptT, throwError )
+import           Control.Monad              ( when, unless )
+import           Control.Monad.Except       ( runExceptT, throwError, mapExceptT )
 import           Control.Monad.State        ( runStateT, gets, gets, modify' )
 import           Control.Monad.IO.Class     ( liftIO )
-import           Control.Monad.Reader       ( asks, ask, runReaderT )
+import           Control.Monad.Reader       ( asks, ask, runReaderT, withReaderT )
 import           Data.Aeson                 ( FromJSON, Result (..), fromJSON )
 import           Data.Aeson.Encode.Pretty   ( encodePretty )
 import           Data.Aeson.Types           ( object, Key, KeyValue((.=)), ToJSON )
@@ -71,53 +75,44 @@ import           System.IO                  ( Handle )
 import qualified Data.ByteString.Lazy.Char8 as BL8
 import qualified Data.ByteString.Char8      as BS
 import qualified Data.HashMap.Strict        as H
+import qualified Data.Text as T
+import qualified Data.Text.Encoding as TE
 ----------------------------------------------------------------------------
 import           DAP.Types
 import           DAP.Utils
+import           DAP.Log
 import           DAP.Internal
 ----------------------------------------------------------------------------
-logWarn :: BL8.ByteString -> Adaptor app request ()
+logWarn :: T.Text -> Adaptor app request ()
 logWarn msg = logWithAddr WARN Nothing (withBraces msg)
 ----------------------------------------------------------------------------
-logError :: BL8.ByteString -> Adaptor app request ()
+logError :: T.Text -> Adaptor app request ()
 logError msg = logWithAddr ERROR Nothing (withBraces msg)
 ----------------------------------------------------------------------------
-logInfo :: BL8.ByteString -> Adaptor app request ()
+logInfo :: T.Text -> Adaptor app request ()
 logInfo msg = logWithAddr INFO Nothing (withBraces msg)
 ----------------------------------------------------------------------------
 -- | Meant for internal consumption, used to signify a message has been
 -- SENT from the server
-debugMessage :: BL8.ByteString -> Adaptor app request ()
-debugMessage msg = do
-  shouldLog <- getDebugLogging
-  addr <- getAddress
-  liftIO
-    $ when shouldLog
-    $ logger DEBUG addr (Just SENT) msg
+debugMessage :: DebugStatus -> BL8.ByteString -> Adaptor app request ()
+debugMessage dir msg = do
+#if MIN_VERSION_text(2,0,0)
+  logWithAddr DEBUG (Just dir) (TE.decodeUtf8Lenient (BL8.toStrict msg))
+#else
+  logWithAddr DEBUG (Just dir) (TE.decodeUtf8 (BL8.toStrict msg))
+#endif
 ----------------------------------------------------------------------------
 -- | Meant for external consumption
-logWithAddr :: Level -> Maybe DebugStatus -> BL8.ByteString -> Adaptor app request ()
+logWithAddr :: Level -> Maybe DebugStatus -> T.Text -> Adaptor app request ()
 logWithAddr level status msg = do
   addr <- getAddress
-  liftIO (logger level addr status msg)
+  logAction <- getLogAction
+  liftIO (logger logAction level addr status msg)
 ----------------------------------------------------------------------------
 -- | Meant for external consumption
-logger :: Level -> SockAddr -> Maybe DebugStatus -> BL8.ByteString -> IO ()
-logger level addr maybeDebug msg = do
-  liftIO
-    $ withGlobalLock
-    $ BL8.putStrLn formatted
-  where
-    formatted
-      = BL8.concat
-      [ withBraces $ BL8.pack (show addr)
-      , withBraces $ BL8.pack (show level)
-      , maybe mempty (withBraces . BL8.pack . show) maybeDebug
-      , msg
-      ]
-----------------------------------------------------------------------------
-getDebugLogging :: Adaptor app request Bool
-getDebugLogging = asks (debugLogging . serverConfig)
+logger :: LogAction IO DAPLog -> Level -> SockAddr -> Maybe DebugStatus -> T.Text -> IO ()
+logger logAction level addr maybeDebug msg =
+  logAction <& DAPLog level maybeDebug addr msg
 ----------------------------------------------------------------------------
 getServerCapabilities :: Adaptor app request Capabilities
 getServerCapabilities = asks (serverCapabilities . serverConfig)
@@ -125,7 +120,10 @@ getServerCapabilities = asks (serverCapabilities . serverConfig)
 getAddress :: Adaptor app request SockAddr
 getAddress = asks address
 ----------------------------------------------------------------------------
-getHandle :: Adaptor app request Handle
+getLogAction :: Adaptor app request (LogAction IO DAPLog)
+getLogAction = asks logAction
+----------------------------------------------------------------------------
+getHandle :: Adaptor app r Handle
 getHandle = asks handle
 ----------------------------------------------------------------------------
 getRequestSeqNum :: Adaptor app Request Seq
@@ -178,7 +176,7 @@ registerNewDebugSession k v debuggerConcurrentActions = do
     DebuggerThreadState
       <$> sequence [fork $ action (runAdaptorWith lcl' emptyState) | action <- debuggerConcurrentActions]
   liftIO . atomically $ modifyTVar' store (H.insert k (debuggerThreadState, v))
-  logInfo $ BL8.pack $ "Registered new debug session: " <> unpack k
+  logInfo $ T.pack $ "Registered new debug session: " <> unpack k
   setDebugSessionId k
 
 ----------------------------------------------------------------------------
@@ -220,7 +218,7 @@ destroyDebugSession = do
   liftIO $ do
     mapM_ killThread debuggerThreads
     atomically $ modifyTVar' store (H.delete sessionId)
-  logInfo $ BL8.pack $ "SessionId " <> unpack sessionId <> " ended"
+  logInfo $ T.pack $ "SessionId " <> unpack sessionId <> " ended"
 ----------------------------------------------------------------------------
 getAppStore :: Adaptor app request (AppStore app)
 getAppStore = asks appStore
@@ -279,8 +277,8 @@ sendEvent action = do
   messageType   <- gets messageType
   address       <- getAddress
   let errorMsg =
-        "Use 'send' function when responding to a DAP request, 'sendEvent'\
-        \ is for responding to events"
+        "Use 'send' function when responding to a DAP request, "
+        <> "'sendEvent' is for responding to events"
   case messageType of
     MessageTypeResponse ->
       sendError (ErrorMessage errorMsg) Nothing
@@ -305,7 +303,7 @@ writeToHandle
   -> Adaptor app request ()
 writeToHandle _ handle evt = do
   let msg = encodeBaseProtocolMessage evt
-  debugMessage ("\n" <> encodePretty evt)
+  debugMessage SENT ("\n" <> encodePretty evt)
   withConnectionLock (BS.hPutStr handle msg)
 ----------------------------------------------------------------------------
 -- | Resets Adaptor's payload
@@ -418,23 +416,26 @@ getArguments = do
   let msg = "No args found for this message"
   case maybeArgs of
     Nothing -> do
-      logError (BL8.pack msg)
+      logError msg
       liftIO $ throwIO (ExpectedArguments msg)
     Just val ->
       case fromJSON val of
         Success r -> pure r
-        x -> do
-          logError (BL8.pack (show x))
-          liftIO $ throwIO (ParseException (show x))
+        Error reason -> do
+          logError (T.pack reason)
+          liftIO $ throwIO (ParseException reason)
 ----------------------------------------------------------------------------
 -- | Evaluates Adaptor action by using and updating the state in the MVar
-runAdaptorWith
-  :: AdaptorLocal app request
-  -> AdaptorState
-  -> Adaptor app request ()
-  -> IO ()
-runAdaptorWith lcl st (Adaptor action) =
-  void (runStateT (runReaderT (runExceptT action) lcl) st)
+runAdaptorWith :: AdaptorLocal app request -> AdaptorState -> Adaptor app request () -> IO ()
+runAdaptorWith lcl st (Adaptor action) = do
+  (es,final_st) <- runStateT (runReaderT (runExceptT action) lcl) st
+  case es of
+    Left err -> error ("runAdaptorWith, unhandled exception:" <> show err)
+    Right () -> case final_st of
+      AdaptorState _ p ->
+        if null p
+          then return ()
+          else error $ "runAdaptorWith, unexpected payload:" <> show p
 ----------------------------------------------------------------------------
 -- | Utility for evaluating a monad transformer stack
 runAdaptor :: AdaptorLocal app Request -> AdaptorState -> Adaptor app Request () -> IO ()
@@ -444,3 +445,6 @@ runAdaptor lcl s (Adaptor client) =
       runAdaptor lcl s' (sendErrorResponse errorMessage maybeMessage)
     (Right (), _) -> pure ()
 ----------------------------------------------------------------------------
+
+withRequest :: Request -> Adaptor app Request a -> Adaptor app r a
+withRequest r (Adaptor client) = Adaptor (mapExceptT (withReaderT (\lcl -> lcl { request = r })) client)
