@@ -15,20 +15,26 @@
 {-# LANGUAGE NamedFieldPuns             #-}
 {-# LANGUAGE DeriveGeneric              #-}
 {-# LANGUAGE LambdaCase                 #-}
+{-# LANGUAGE ViewPatterns               #-}
 ----------------------------------------------------------------------------
 module DAP.Server
   ( runDAPServer
   , runDAPServerWithLogger
   , readPayload
+  , TerminateServer(..)
   ) where
 ----------------------------------------------------------------------------
 import           Control.Monad              ( when, forever )
+import           Control.Concurrent         ( ThreadId, myThreadId, throwTo )
 import           Control.Concurrent.MVar    ( newMVar )
 import           Control.Concurrent.STM     ( newTVarIO )
-import           Control.Exception          ( SomeException
+import           Control.Exception          ( Exception
+                                            , SomeAsyncException(..)
+                                            , SomeException
                                             , IOException
                                             , catch
                                             , fromException
+                                            , toException
                                             , throwIO )
 import           Control.Monad              ( void )
 import           Data.Aeson                 ( decodeStrict, eitherDecode, Value, FromJSON )
@@ -42,6 +48,7 @@ import           System.IO                  ( hClose, hSetNewlineMode, Handle, N
                                             , NewlineMode(NewlineMode, outputNL, inputNL)
                                             , IOMode(ReadWriteMode), stderr, hPrint)
 import           System.IO.Error            ( isEOFError )
+import           System.Exit                ( exitWith, ExitCode(ExitSuccess) )
 import           Text.Read                  ( readMaybe )
 import qualified Data.ByteString.Lazy.Char8 as BL8
 import qualified Data.ByteString.Char8      as BS
@@ -63,7 +70,11 @@ stdoutLogger = do
     withLock handleLock $ do
       T.putStrLn msg
 
-
+-- | An exception to throw if you want to stop the server execution from a
+-- client. This is useful if you launch a new server per debugging session and
+-- want to terminate it at the end.
+data TerminateServer = TerminateServer
+  deriving (Show, Exception)
 
 runDAPServer :: ServerConfig -> (Command -> Adaptor app Request ()) -> IO ()
 runDAPServer config communicate = do
@@ -81,13 +92,19 @@ runDAPServerWithLogger rawLogAction serverConfig@ServerConfig {..} communicate =
   let logAction = cfilter (\msg -> if debugLogging then True else severity msg /= DEBUG) rawLogAction
   logAction <& (mkDebugMessage $ (T.pack ("Running DAP server on " <> show port <> "...")))
   appStore <- newTVarIO mempty
-  serve (Host host) (show port) $ \(socket, address) -> do
-    logAction <& mkDebugMessage (T.pack ("TCP connection established from " ++ show address))
-    handle <- socketToHandle socket ReadWriteMode
-    hSetNewlineMode handle NewlineMode { inputNL = CRLF, outputNL = CRLF }
-    adaptorStateMVar <- initAdaptorState logAction handle address appStore serverConfig
-    serviceClient communicate adaptorStateMVar
-      `catch` exceptionHandler logAction handle address debugLogging
+  mainThread <- myThreadId
+  let
+    server = serve (Host host) (show port) $ \(socket, address) -> do
+      logAction <& mkDebugMessage (T.pack ("TCP connection established from " ++ show address))
+      handle <- socketToHandle socket ReadWriteMode
+      hSetNewlineMode handle NewlineMode { inputNL = CRLF, outputNL = CRLF }
+      adaptorStateMVar <- initAdaptorState logAction handle address appStore serverConfig
+      serviceClient communicate adaptorStateMVar
+        `catch` exceptionHandler logAction handle address debugLogging mainThread
+  server `catch` \(SomeAsyncException e) ->
+    case fromException $ toException e of
+      Just TerminateServer -> exitWith ExitSuccess
+      _                    -> throwIO e
 
 -- | Initializes the Adaptor
 --
@@ -120,11 +137,18 @@ serviceClient communicate lcl = forever $ runAdaptorWith lcl st $ do
   where
     st = AdaptorState MessageTypeResponse []
 ----------------------------------------------------------------------------
--- | Handle exceptions from client threads, parse and log accordingly
-exceptionHandler :: LogAction IO DAPLog -> Handle -> SockAddr -> Bool -> SomeException -> IO ()
-exceptionHandler logAction handle address shouldLog (e :: SomeException) = do
+-- | Handle exceptions from client threads, parse and log accordingly.
+-- Detects if client failed with `TerminateServer` and kills the server accordingly by sending an exception to the main thread.
+exceptionHandler :: LogAction IO DAPLog -> Handle -> SockAddr -> Bool -> ThreadId -> SomeException -> IO ()
+exceptionHandler logAction handle address shouldLog serverThread (e :: SomeException) = do
   let
     dumpError
+      | Just TerminateServer      <- fromException e
+          = do
+            logger logAction ERROR address Nothing
+              $ withBraces
+              $ T.pack ("Server terminated!")
+            throwTo serverThread (SomeAsyncException TerminateServer)
       | Just (ParseException msg) <- fromException e
           = logger logAction ERROR address Nothing
             $ withBraces
