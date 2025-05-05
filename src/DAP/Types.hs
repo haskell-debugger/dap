@@ -2985,7 +2985,7 @@ data SetBreakpointsArguments
     -- ^
     -- Deprecated: The code locations of the breakpoints.
     --
-  , setBreakpointsArgumentsSourceModified :: Bool
+  , setBreakpointsArgumentsSourceModified :: Maybe Bool
     -- ^
     -- A value of true indicates that the underlying source has been modified
     -- which results in new breakpoint locations.
