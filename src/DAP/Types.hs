@@ -72,6 +72,8 @@ module DAP.Types
   , PathFormat                         (..)
     -- * Command
   , Command                            (..)
+    -- * Reverse Command
+  , ReverseCommand                     (..)
     -- * Event
   , EventType                          (..)
     -- ** Events
@@ -121,6 +123,7 @@ module DAP.Types
   , LoadedSourcesResponse              (..)
   , ModulesResponse                    (..)
   , ReadMemoryResponse                 (..)
+  , RunInTerminalResponse              (..)
   , ScopesResponse                     (..)
   , SetExpressionResponse              (..)
   , SetVariableResponse                (..)
@@ -153,6 +156,8 @@ module DAP.Types
   , RestartArguments                   (..)
   , RestartFrameArguments              (..)
   , ReverseContinueArguments           (..)
+  , RunInTerminalRequestArguments      (..)
+  , RunInTerminalRequestArgumentsKind  (..)
   , ScopesArguments                    (..)
   , SetBreakpointsArguments            (..)
   , SetDataBreakpointsArguments        (..)
@@ -172,7 +177,6 @@ module DAP.Types
   , ThreadsArguments                   (..)
   , VariablesArguments                 (..)
   , WriteMemoryArguments               (..)
-  , RunInTerminalResponse              (..)
     -- * defaults
   , defaultBreakpoint
   , defaultBreakpointLocation
@@ -894,8 +898,6 @@ instance ToJSON EventType where
 ----------------------------------------------------------------------------
 data Command
   = CommandCancel
-  | CommandRunInTerminal
-  | CommandStartDebugging
   | CommandInitialize
   | CommandConfigurationDone
   | CommandLaunch
@@ -952,6 +954,24 @@ instance FromJSON Command where
 ----------------------------------------------------------------------------
 instance ToJSON Command where
   toJSON (CustomCommand x) = toJSON x
+  toJSON cmd = genericToJSONWithModifier cmd
+----------------------------------------------------------------------------
+data ReverseCommand
+  = ReverseCommandRunInTerminal
+  | ReverseCommandStartDebugging
+  deriving stock (Show, Eq, Read, Generic)
+----------------------------------------------------------------------------
+instance FromJSON ReverseCommand where
+  parseJSON = withText name $ \command ->
+    case readMaybe (name <> capitalize (T.unpack command)) of
+      Just cmd ->
+        pure cmd
+      Nothing ->
+        fail $ "Unknown reverse command: " ++ show command
+    where
+      name = show (typeRep (Proxy @ReverseCommand))
+----------------------------------------------------------------------------
+instance ToJSON ReverseCommand where
   toJSON cmd = genericToJSONWithModifier cmd
 ----------------------------------------------------------------------------
 data ErrorMessage
@@ -2688,6 +2708,9 @@ data RunInTerminalRequestArgumentsKind
   | RunInTerminalRequestArgumentsKindExternal
   deriving stock (Show, Eq, Generic)
 ----------------------------------------------------------------------------
+instance ToJSON RunInTerminalRequestArgumentsKind where
+  toJSON = genericToJSONWithModifier
+----------------------------------------------------------------------------
 instance FromJSON RunInTerminalRequestArgumentsKind where
   parseJSON = genericParseJSONWithModifier
 ----------------------------------------------------------------------------
@@ -2727,6 +2750,9 @@ data RunInTerminalRequestArguments
     -- special characters may not be portable across shells.
     --
   } deriving stock (Show, Eq, Generic)
+----------------------------------------------------------------------------
+instance ToJSON RunInTerminalRequestArguments where
+  toJSON = genericToJSONWithModifier
 ----------------------------------------------------------------------------
 instance FromJSON RunInTerminalRequestArguments where
   parseJSON = genericParseJSONWithModifier

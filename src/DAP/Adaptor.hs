@@ -26,6 +26,9 @@ module DAP.Adaptor
   , sendErrorResponse
   -- * Events
   , sendSuccesfulEvent
+  -- * Reverse Requests
+  , sendReverseRequest
+  , sendRunInTerminalReverseRequest
   -- * Server
   , getServerCapabilities
   , withConnectionLock
@@ -292,6 +295,21 @@ sendEvent action = do
   -- Send payload to client from debug adaptor
   writeToHandle address handle payload
   resetAdaptorStatePayload
+----------------------------------------------------------------------------
+-- | Write reverse request to Handle
+sendReverseRequest
+  :: ReverseCommand
+  -> Adaptor app Request ()
+sendReverseRequest rcmd = send $ do
+  setField "type" MessageTypeRequest
+  setField "command" rcmd
+----------------------------------------------------------------------------
+-- | Send runInTerminal reverse request
+sendRunInTerminalReverseRequest :: RunInTerminalRequestArguments -> Adaptor app Request ()
+sendRunInTerminalReverseRequest args = do
+  setField "arguments" args
+  sendReverseRequest ReverseCommandRunInTerminal
+
 ----------------------------------------------------------------------------
 -- | Writes payload to the given 'Handle' using the local connection lock
 ----------------------------------------------------------------------------
