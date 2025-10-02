@@ -101,13 +101,14 @@ module DAP.Types
   , AdaptorState                       (..)
   , AdaptorLocal(..)
   , AppStore
-  , MonadIO(..)
+  , MonadIO
     -- * Errors
   , AdaptorException                   (..)
   , ErrorMessage                       (..)
   , ErrorResponse                      (..)
     -- * Request
   , Request                            (..)
+  , ReverseRequestResponse             (..)
     -- * Misc.
   , PayloadSize
   , Seq
@@ -223,7 +224,7 @@ import           Data.Aeson                      ( (.:), (.:?), withObject, with
                                                  , FromJSON(parseJSON), Value, KeyValue((.=))
                                                  , ToJSON(toJSON), genericParseJSON, defaultOptions
                                                  )
-import           Data.Aeson.Types                ( Pair, typeMismatch )
+import           Data.Aeson.Types                ( Pair, typeMismatch, Parser )
 import           Data.Proxy                      ( Proxy(Proxy) )
 import           Data.String                     ( IsString(..) )
 import           Data.Time                       ( UTCTime )
@@ -365,10 +366,35 @@ data Request
 ----------------------------------------------------------------------------
 instance FromJSON Request where
   parseJSON = withObject "Request" $ \o -> do
+    "request" <- (o .: "type") :: Parser String
     Request
       <$> o .:? "arguments"
       <*> o .: "seq"
       <*> o .: "command"
+----------------------------------------------------------------------------
+data ReverseRequestResponse
+  = ReverseRequestResponse
+  { body :: Maybe Value
+    -- ^ Request arguments
+    --
+  , reverseRequestResponseSeqNum :: Seq
+    -- ^ Request sequence number
+    --
+  , reverseRequestCommand :: ReverseCommand
+    -- ^ Command of Request
+    --
+  , success :: Bool
+    -- ^ Whether the reverse request was successful
+  } deriving stock (Show)
+----------------------------------------------------------------------------
+instance FromJSON ReverseRequestResponse where
+  parseJSON = withObject "ReverseRequestResponse" $ \o -> do
+    "response" <- (o .: "type") :: Parser String
+    ReverseRequestResponse
+      <$> o .:? "body"
+      <*> o .: "seq"
+      <*> o .: "command"
+      <*> o .: "success"
 ----------------------------------------------------------------------------
 data Breakpoint
   = Breakpoint
@@ -1115,6 +1141,8 @@ data RunInTerminalResponse
 ----------------------------------------------------------------------------
 instance ToJSON RunInTerminalResponse where
   toJSON = genericToJSONWithModifier
+instance FromJSON RunInTerminalResponse where
+  parseJSON = genericParseJSONWithModifier
 ----------------------------------------------------------------------------
 data ModulesResponse
   = ModulesResponse

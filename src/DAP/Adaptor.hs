@@ -35,6 +35,7 @@ module DAP.Adaptor
   -- * Request Arguments
   , getArguments
   , getRequestSeqNum
+  , getReverseRequestResponseBody
   -- * Debug Session
   , registerNewDebugSession
   , updateDebugSession
@@ -431,6 +432,25 @@ getArguments
   => Adaptor app Request value
 getArguments = do
   maybeArgs <- asks (args . request)
+  let msg = "No args found for this message"
+  case maybeArgs of
+    Nothing -> do
+      logError msg
+      liftIO $ throwIO (ExpectedArguments msg)
+    Just val ->
+      case fromJSON val of
+        Success r -> pure r
+        Error reason -> do
+          logError (T.pack reason)
+          liftIO $ throwIO (ParseException reason)
+----------------------------------------------------------------------------
+-- | Attempt to parse arguments from a ReverseRequestResponse (not in env)
+----------------------------------------------------------------------------
+getReverseRequestResponseBody
+  :: (Show value, FromJSON value)
+  => ReverseRequestResponse -> Adaptor app r value
+getReverseRequestResponseBody resp = do
+  let maybeArgs = body resp
   let msg = "No args found for this message"
   case maybeArgs of
     Nothing -> do
