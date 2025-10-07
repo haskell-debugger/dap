@@ -1,5 +1,5 @@
 name:               dap
-version:            0.2.0.0
+version:            0.3.0.0
 description:        A library for the Debug Adaptor Protocol (DAP)
 synopsis:           A debug adaptor protocol library
 bug-reports:        https://github.com/haskell-debugger/dap/issues
@@ -36,7 +36,7 @@ library
     lifted-base          >= 0.2.3  && < 0.3,
     monad-control        >= 1.0.3  && < 1.1,
     mtl                  >= 2.2.2  && < 2.4,
-    network              >= 3.1.2  && < 3.2,
+    network              >= 3.1.2  && < 3.3,
     network-simple       >= 0.4.5  && < 0.5,
     text                 >= 1.2.5  && < 2.2,
     time                 >= 1.11.1 && < 1.12,

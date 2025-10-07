@@ -76,10 +76,13 @@ stdoutLogger = do
 data TerminateServer = TerminateServer
   deriving (Show, Exception)
 
+-- | Simpler version of 'runDAPServerWithLogger'.
+--
+-- If you don't need a custom logger or to observe reverse request responses.
 runDAPServer :: ServerConfig -> (Command -> Adaptor app Request ()) -> IO ()
 runDAPServer config communicate = do
   l <- stdoutLogger
-  runDAPServerWithLogger (cmap renderDAPLog l) config communicate
+  runDAPServerWithLogger (cmap renderDAPLog l) config communicate (const (pure ()))
 
 runDAPServerWithLogger
   :: LogAction IO DAPLog
@@ -87,8 +90,10 @@ runDAPServerWithLogger
   -- ^ Top-level Server configuration, global across all debug sessions
   -> (Command -> Adaptor app Request ())
   -- ^ A function to facilitate communication between DAP clients, debug adaptors and debuggers
+  -> (ReverseRequestResponse -> Adaptor app () ())
+  -- ^ A function to receive reverse-request-responses from DAP clients
   -> IO ()
-runDAPServerWithLogger rawLogAction serverConfig@ServerConfig {..} communicate = withSocketsDo $ do
+runDAPServerWithLogger rawLogAction serverConfig@ServerConfig {..} communicate ackResp = withSocketsDo $ do
   let logAction = cfilter (\msg -> if debugLogging then True else severity msg /= DEBUG) rawLogAction
   logAction <& (mkDebugMessage $ (T.pack ("Running DAP server on " <> show port <> "...")))
   appStore <- newTVarIO mempty
@@ -99,7 +104,7 @@ runDAPServerWithLogger rawLogAction serverConfig@ServerConfig {..} communicate =
       handle <- socketToHandle socket ReadWriteMode
       hSetNewlineMode handle NewlineMode { inputNL = CRLF, outputNL = CRLF }
       adaptorStateMVar <- initAdaptorState logAction handle address appStore serverConfig
-      serviceClient communicate adaptorStateMVar
+      serviceClient communicate ackResp adaptorStateMVar
         `catch` exceptionHandler logAction handle address debugLogging mainThread
   server `catch` \(SomeAsyncException e) ->
     case fromException $ toException e of
@@ -127,13 +132,20 @@ initAdaptorState logAction handle address appStore serverConfig = do
 -- Evaluates the current 'Request' located in the 'AdaptorState'
 -- Fetches, updates and recurses on the next 'Request'
 --
+-- Similarly, if the client responded to a reverse request then we execute the
+-- acknowledge action (which, notably, is not an @'Adaptor' _ 'Request'@
+-- because there's no 'Request' to reply to)
 serviceClient
   :: (Command -> Adaptor app Request ())
+  -> (ReverseRequestResponse -> Adaptor app r ())
   -> AdaptorLocal app r
   -> IO ()
-serviceClient communicate lcl = forever $ runAdaptorWith lcl st $ do
-    nextRequest <- getRequest
-    withRequest nextRequest (communicate (command nextRequest))
+serviceClient communicate ackResp lcl = forever $ runAdaptorWith lcl st $ do
+    either_nextRequest <- getRequest
+    case either_nextRequest of
+      Right nextRequest ->
+        withRequest nextRequest (communicate (command nextRequest))
+      Left rrr -> ackResp rrr
   where
     st = AdaptorState MessageTypeResponse []
 ----------------------------------------------------------------------------
@@ -172,7 +184,7 @@ exceptionHandler logAction handle address shouldLog serverThread (e :: SomeExcep
 -- 'parseHeader' Attempts to parse 'Content-Length: <byte-count>'
 -- Helper function for parsing message headers
 -- e.g. ("Content-Length: 11\r\n")
-getRequest :: Adaptor app r Request
+getRequest :: Adaptor app r (Either ReverseRequestResponse Request)
 getRequest = do
   handle <- getHandle
   header <- liftIO $ getHeaderHandle handle
@@ -186,10 +198,15 @@ getRequest = do
           ("\n" <> encodePretty (decodeStrict body :: Maybe Value))
       case eitherDecode (BL8.fromStrict body) of
         Left couldn'tDecodeBody -> do
-          logError (T.pack couldn'tDecodeBody)
-          liftIO $ throwIO (ParseException couldn'tDecodeBody)
+          -- As a fallback, try to parse a reverse request response
+          case eitherDecode (BL8.fromStrict body) of
+            Right rrr -> pure (Left rrr)
+            Left _ -> do
+              -- No luck, report fail to parse command:
+              logError (T.pack couldn'tDecodeBody)
+              liftIO $ throwIO (ParseException couldn'tDecodeBody)
         Right request ->
-          pure request
+          pure (Right request)
 
 getHeaderHandle :: Handle -> IO (Either String PayloadSize)
 getHeaderHandle handle = do

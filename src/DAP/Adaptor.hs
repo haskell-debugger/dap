@@ -26,12 +26,16 @@ module DAP.Adaptor
   , sendErrorResponse
   -- * Events
   , sendSuccesfulEvent
+  -- * Reverse Requests
+  , sendReverseRequest
+  , sendRunInTerminalReverseRequest
   -- * Server
   , getServerCapabilities
   , withConnectionLock
   -- * Request Arguments
   , getArguments
   , getRequestSeqNum
+  , getReverseRequestResponseBody
   -- * Debug Session
   , registerNewDebugSession
   , updateDebugSession
@@ -293,6 +297,21 @@ sendEvent action = do
   writeToHandle address handle payload
   resetAdaptorStatePayload
 ----------------------------------------------------------------------------
+-- | Write reverse request to Handle
+sendReverseRequest
+  :: ReverseCommand
+  -> Adaptor app Request ()
+sendReverseRequest rcmd = send $ do
+  setField "type" MessageTypeRequest
+  setField "command" rcmd
+----------------------------------------------------------------------------
+-- | Send runInTerminal reverse request
+sendRunInTerminalReverseRequest :: RunInTerminalRequestArguments -> Adaptor app Request ()
+sendRunInTerminalReverseRequest args = do
+  setField "arguments" args
+  sendReverseRequest ReverseCommandRunInTerminal
+
+----------------------------------------------------------------------------
 -- | Writes payload to the given 'Handle' using the local connection lock
 ----------------------------------------------------------------------------
 writeToHandle
@@ -413,6 +432,25 @@ getArguments
   => Adaptor app Request value
 getArguments = do
   maybeArgs <- asks (args . request)
+  let msg = "No args found for this message"
+  case maybeArgs of
+    Nothing -> do
+      logError msg
+      liftIO $ throwIO (ExpectedArguments msg)
+    Just val ->
+      case fromJSON val of
+        Success r -> pure r
+        Error reason -> do
+          logError (T.pack reason)
+          liftIO $ throwIO (ParseException reason)
+----------------------------------------------------------------------------
+-- | Attempt to parse arguments from a ReverseRequestResponse (not in env)
+----------------------------------------------------------------------------
+getReverseRequestResponseBody
+  :: (Show value, FromJSON value)
+  => ReverseRequestResponse -> Adaptor app r value
+getReverseRequestResponseBody resp = do
+  let maybeArgs = body resp
   let msg = "No args found for this message"
   case maybeArgs of
     Nothing -> do

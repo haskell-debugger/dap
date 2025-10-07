@@ -1,5 +1,15 @@
 # Revision history for dap
 
+## 0.3.0.0 -- 2025-10-03
+
+### Main library changes
+
+* Adds support for sending a `runInTerminal` reverse request using
+  `sendRunInTerminalReverseRequest`.
+* And adds support for receiving responses to reverse requests via the new
+  argument to `runDAPServerWithLogger` -- a function which receives a
+  `ReverseRequestResponse`.
+
 ## 0.2.0.0 -- 2025-05-05
 
 ### Main library changes
