@@ -5,10 +5,11 @@
 ### Main library changes
 
 * Adds support for sending a `runInTerminal` reverse request using
-  `sendRunInTerminalReverseRequest`.
+  `sendRunInTerminalReverseRequest`. (#15)
 * And adds support for receiving responses to reverse requests via the new
   argument to `runDAPServerWithLogger` -- a function which receives a
   `ReverseRequestResponse`.
+* Make `InitializeRequestArguments` comply to the protocol (#17)
 
 ## 0.2.0.0 -- 2025-05-05
 
