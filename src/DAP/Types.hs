@@ -2844,11 +2844,11 @@ data InitializeRequestArguments
     -- ^
     -- The ISO-639 locale of the client using this adapter, e.g. en-US or de-CH.
     --
-  , linesStartAt1 :: Bool
+  , linesStartAt1 :: Maybe Bool
     -- ^
     -- If true all line numbers are 1-based (default).
     --
-  , columnsStartAt1 :: Bool
+  , columnsStartAt1 :: Maybe Bool
     -- ^
     -- If true all column numbers are 1-based (default).
     --
@@ -2858,42 +2858,48 @@ data InitializeRequestArguments
     -- is the native format.
     -- Values: 'path', 'uri', etc.
     --
-  , supportsVariableType :: Bool
+  , supportsVariableType :: Maybe Bool
     -- ^
     -- Client supports the `type` attribute for variables.
     --
-  , supportsVariablePaging :: Bool
+  , supportsVariablePaging :: Maybe Bool
     -- ^
     -- Client supports the paging of variables.
     --
-  , supportsRunInTerminalRequest :: Bool
+  , supportsRunInTerminalRequest :: Maybe Bool
     -- ^
     -- Client supports the `runInTerminal` request.
     --
-  , supportsMemoryReferences :: Bool
+  , supportsMemoryReferences :: Maybe Bool
     -- ^
     -- Client supports memory references.
     --
-  , supportsProgressReporting :: Bool
+  , supportsProgressReporting :: Maybe Bool
     -- ^
     -- Client supports progress reporting.
     --
-  , supportsInvalidatedEvent :: Bool
+  , supportsInvalidatedEvent :: Maybe Bool
     -- ^
     -- Client supports the `invalidated` event.
     --
-  , supportsMemoryEvent :: Bool
+  , supportsMemoryEvent :: Maybe Bool
     -- ^
     -- Client supports the `memory` event.
     --
-  , supportsArgsCanBeInterpretedByShell :: Bool
+  , supportsArgsCanBeInterpretedByShell :: Maybe Bool
     -- ^
     -- Client supports the `argsCanBeInterpretedByShell` attribute on the
     -- `runInTerminal` request.
     --
-  , supportsStartDebuggingRequest :: Bool
+  , supportsStartDebuggingRequest :: Maybe Bool
     -- ^
     -- Client supports the `startDebugging` request.
+    --
+  , supportsANSIStyling :: Maybe Bool
+    -- ^
+    -- The client will interpret ANSI escape sequences in the display of
+    -- `OutputEvent.output` and `Variable.value` fields when
+    -- `Capabilities.supportsANSIStyling` is also enabled.
     --
   } deriving stock (Show, Eq, Generic)
 ----------------------------------------------------------------------------
