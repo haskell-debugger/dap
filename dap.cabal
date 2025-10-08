@@ -94,4 +94,4 @@ test-suite tests
 
 source-repository head
   type: git
-  location: git://github.com/haskell-debugger/dap.git
+  location: https://github.com/haskell-debugger/dap.git
