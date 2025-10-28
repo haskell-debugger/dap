@@ -3121,7 +3121,7 @@ instance FromJSON SetFunctionBreakpointsArguments where
 ----------------------------------------------------------------------------
 data FunctionBreakpoint
   = FunctionBreakpoint
-  { functionBreakpointName :: Maybe Text
+  { functionBreakpointName :: Text
     -- ^
     -- The name of the function.
     --
@@ -3143,7 +3143,7 @@ data FunctionBreakpoint
 defaultFunctionBreakpoint :: FunctionBreakpoint
 defaultFunctionBreakpoint
   = FunctionBreakpoint
-  { functionBreakpointName = Nothing
+  { functionBreakpointName = ""
   , functionBreakpointCondition = Nothing
   , functionBreakpointHitCondition = Nothing
   }
