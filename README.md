@@ -4,7 +4,7 @@
 
 A [Debug Adaptor Protocol](https://microsoft.github.io/debug-adapter-protocol) (DAP) library.
 
-This library can be used for constructing debug adaptors for any programming language.
+This library can be used to construct debug adaptors for any programming language.
 
 # Table of Contents
 1. [Usage](#usage)
@@ -109,5 +109,3 @@ $ stack haddock
 ```bash
 $ cabal haddock
 ```
-
-
