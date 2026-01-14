@@ -2009,19 +2009,19 @@ instance ToJSON CompletionItemType where
 ----------------------------------------------------------------------------
 data ExceptionInfoResponse
   = ExceptionInfoResponse
-  { exceptionInfoResponseId :: Text
+  { exceptionInfoResponseExceptionId :: Text
     -- ^
     -- ID of the exception that was thrown.
     --
-  , exceptionInfoDescriptionId :: Maybe Text
+  , exceptionInfoResponseDescription :: Maybe Text
     -- ^
     -- Descriptive text for the exception.
     --
-  , exceptionInfoBreakMode :: ExceptionBreakMode
+  , exceptionInfoResponseBreakMode :: ExceptionBreakMode
     -- ^
     -- Mode that caused the exception notification to be raised.
     --
-  , exceptionInfoReponseDetails :: Maybe ExceptionDetails
+  , exceptionInfoResponseDetails :: Maybe ExceptionDetails
     -- ^
     -- Detailed information about the exception.
     --
