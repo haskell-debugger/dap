@@ -55,8 +55,8 @@ module DAP.Adaptor
   , sendRaw
   -- * Internal function used to execute actions on behalf of the DAP server
   -- from child threads (useful for handling asynchronous debugger events).
-  , runAdaptorWith
-  , runAdaptor
+  , runAdaptorPoly
+  , runAdaptorRequest
   , withRequest
   , getHandle
   ) where
@@ -178,7 +178,7 @@ registerNewDebugSession k v debuggerConcurrentActions = do
   let emptyState = AdaptorState MessageTypeEvent []
   debuggerThreadState <- liftIO $
     DebuggerThreadState
-      <$> sequence [fork $ action (runAdaptorWith lcl' emptyState) | action <- debuggerConcurrentActions]
+      <$> sequence [fork $ action (runAdaptorPoly lcl' emptyState) | action <- debuggerConcurrentActions]
   liftIO . atomically $ modifyTVar' store (H.insert k (debuggerThreadState, v))
   logInfo $ T.pack $ "Registered new debug session: " <> unpack k
   setDebugSessionId k
@@ -463,24 +463,29 @@ getReverseRequestResponseBody resp = do
           logError (T.pack reason)
           liftIO $ throwIO (ParseException reason)
 ----------------------------------------------------------------------------
--- | Evaluates Adaptor action by using and updating the state in the MVar
-runAdaptorWith :: AdaptorLocal app request -> AdaptorState -> Adaptor app request () -> IO ()
-runAdaptorWith lcl st (Adaptor action) = do
+-- | Run an Adaptor for any parametric 'request' (i.e. this function can be
+-- used regardless in a non-Request scenario).
+runAdaptorPoly :: AdaptorLocal app request -> AdaptorState -> Adaptor app request a -> IO a
+runAdaptorPoly lcl st (Adaptor action) = do
   (es,final_st) <- runStateT (runReaderT (runExceptT action) lcl) st
   case es of
     Left err -> error ("runAdaptorWith, unhandled exception:" <> show err)
-    Right () -> case final_st of
+    Right x -> case final_st of
       AdaptorState _ p ->
         if null p
-          then return ()
+          then return x
           else error $ "runAdaptorWith, unexpected payload:" <> show p
 ----------------------------------------------------------------------------
--- | Utility for evaluating a monad transformer stack
-runAdaptor :: AdaptorLocal app Request -> AdaptorState -> Adaptor app Request () -> IO ()
-runAdaptor lcl s (Adaptor client) =
+-- | Run an Adaptor in the context of replying to a 'Request' (notably, this
+-- should be used to run the Adaptor servicing the client ('serviceClient')).
+--
+-- When 'sendError' is used to throw an error in the Adaptor, we cancel the
+-- current pending request with an 'ErrorResponse'.
+runAdaptorRequest :: AdaptorLocal app Request -> AdaptorState -> Adaptor app Request () -> IO ()
+runAdaptorRequest lcl s (Adaptor client) =
   runStateT (runReaderT (runExceptT client) lcl) s >>= \case
     (Left (errorMessage, maybeMessage), s') ->
-      runAdaptor lcl s' (sendErrorResponse errorMessage maybeMessage)
+      runAdaptorRequest lcl s' (sendErrorResponse errorMessage maybeMessage)
     (Right (), _) -> pure ()
 ----------------------------------------------------------------------------
 
