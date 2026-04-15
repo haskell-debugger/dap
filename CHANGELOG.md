@@ -1,5 +1,14 @@
 # Revision history for dap
 
+## 0.5.0.0 -- 2026-04-15
+
+* No longer print "Handling" messages which cause confusion wrt actual errors occurring (#30)
+* Make sure sendError sends ErrorResponse when serviceClient throws an error (#27)
+
+## 0.4.0.0 -- 2026-01-14
+
+* Fix the field names of ExceptionInfoResponse (#26)
+
 ## 0.3.0.0 -- 2025-10-03
 
 ### Main library changes
