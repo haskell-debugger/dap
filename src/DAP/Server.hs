@@ -24,7 +24,7 @@ module DAP.Server
   , TerminateServer(..)
   ) where
 ----------------------------------------------------------------------------
-import           Control.Monad              ( when, forever )
+import           Control.Monad              ( when )
 import           Control.Concurrent         ( ThreadId, myThreadId, throwTo )
 import           Control.Concurrent.MVar    ( newMVar )
 import           Control.Concurrent.STM     ( newTVarIO )
@@ -137,15 +137,19 @@ initAdaptorState logAction handle address appStore serverConfig = do
 -- because there's no 'Request' to reply to)
 serviceClient
   :: (Command -> Adaptor app Request ())
-  -> (ReverseRequestResponse -> Adaptor app r ())
-  -> AdaptorLocal app r
+  -> (ReverseRequestResponse -> Adaptor app () ())
+  -> AdaptorLocal app ()
   -> IO ()
-serviceClient communicate ackResp lcl = forever $ runAdaptorWith lcl st $ do
-    either_nextRequest <- getRequest
-    case either_nextRequest of
-      Right nextRequest ->
-        withRequest nextRequest (communicate (command nextRequest))
-      Left rrr -> ackResp rrr
+serviceClient communicate ackResp lcl = do
+  rrr_or_nextRequest <- runAdaptorPoly lcl st getRequest
+  case rrr_or_nextRequest of
+    Right nextRequest -> do
+      let lcl' = lcl{ request = nextRequest }
+      runAdaptorRequest lcl' st $
+        communicate (command nextRequest)
+    Left rrr ->
+      runAdaptorPoly lcl st $ ackResp rrr
+  serviceClient communicate ackResp lcl
   where
     st = AdaptorState MessageTypeResponse []
 ----------------------------------------------------------------------------
