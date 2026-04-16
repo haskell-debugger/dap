@@ -46,7 +46,7 @@ import           Network.Simple.TCP         ( serve, HostPreference(Host) )
 import           Network.Socket             ( socketToHandle, withSocketsDo, SockAddr )
 import           System.IO                  ( hClose, hSetNewlineMode, Handle, Newline(CRLF)
                                             , NewlineMode(NewlineMode, outputNL, inputNL)
-                                            , IOMode(ReadWriteMode), stderr, hPrint)
+                                            , IOMode(ReadWriteMode) )
 import           System.IO.Error            ( isEOFError )
 import           System.Exit                ( exitWith, ExitCode(ExitSuccess) )
 import           Text.Read                  ( readMaybe )
@@ -176,7 +176,6 @@ exceptionHandler logAction handle address shouldLog serverThread (e :: SomeExcep
           = logger logAction ERROR address Nothing
             $ withBraces
             $ T.pack ("Unknown Exception: " <> show e)
-  hPrint stderr ("Handling" <> show e)
   when shouldLog $ do
     dumpError
     logger logAction INFO address (Just SENT) (withBraces "Closing Connection")
