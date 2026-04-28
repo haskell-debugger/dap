@@ -14,6 +14,7 @@
 {-# LANGUAGE RecordWildCards            #-}
 {-# LANGUAGE DeriveAnyClass             #-}
 {-# LANGUAGE DeriveGeneric              #-}
+{-# LANGUAGE DeriveFunctor              #-}
 {-# LANGUAGE LambdaCase                 #-}
 ----------------------------------------------------------------------------
 module DAP.Types
@@ -299,9 +300,13 @@ data AdaptorLocal app request = AdaptorLocal
   , logAction          :: LogAction IO DAPLog
     -- ^ Where to send log output
     --
+  , clientCapabilities  :: Maybe InitializeRequestArguments
+    -- ^ Taken from Initialize Command Requests
+
   , request             :: request
     -- ^ Connection Request information, if we are responding to a request.
   }
+  deriving Functor
 
 ----------------------------------------------------------------------------
 type SessionId = Text

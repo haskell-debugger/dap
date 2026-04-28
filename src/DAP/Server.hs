@@ -37,7 +37,7 @@ import           Control.Exception          ( Exception
                                             , toException
                                             , throwIO )
 import           Control.Monad              ( void )
-import           Data.Aeson                 ( decodeStrict, eitherDecode, Value, FromJSON )
+import           Data.Aeson                 ( decodeStrict, eitherDecode, Value, FromJSON, Result (..), fromJSON )
 import           Data.Aeson.Encode.Pretty   ( encodePretty )
 import           Data.ByteString            ( ByteString )
 import           Data.Char                  ( isDigit )
@@ -124,6 +124,7 @@ initAdaptorState logAction handle address appStore serverConfig = do
   handleLock               <- newMVar ()
   sessionId                <- newIORef Nothing
   let request = ()
+  let clientCapabilities = Nothing
   pure AdaptorLocal
     { ..
     }
@@ -142,16 +143,21 @@ serviceClient
   -> IO ()
 serviceClient communicate ackResp lcl = do
   rrr_or_nextRequest <- runAdaptorPoly lcl st getRequest
-  case rrr_or_nextRequest of
+  lcl' <- case rrr_or_nextRequest of
     Right nextRequest -> do
-      let lcl' = lcl{ request = nextRequest }
+      let lcl' = lcl{ request = nextRequest, clientCapabilities = clientCaps nextRequest }
       runAdaptorRequest lcl' st $
         communicate (command nextRequest)
-    Left rrr ->
+      pure (void lcl')
+    Left rrr -> do
       runAdaptorPoly lcl st $ ackResp rrr
-  serviceClient communicate ackResp lcl
+      pure lcl
+  serviceClient communicate ackResp lcl'
   where
     st = AdaptorState MessageTypeResponse []
+    clientCaps Request{command = CommandInitialize, args = Just (fromJSON -> Success v) }
+      = Just v
+    clientCaps _ = clientCapabilities lcl
 ----------------------------------------------------------------------------
 -- | Handle exceptions from client threads, parse and log accordingly.
 -- Detects if client failed with `TerminateServer` and kills the server accordingly by sending an exception to the main thread.
