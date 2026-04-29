@@ -59,6 +59,7 @@ module DAP.Adaptor
   , runAdaptorRequest
   , withRequest
   , getHandle
+  , getClientCapabilities
   ) where
 ----------------------------------------------------------------------------
 import           Control.Concurrent.Lifted  ( fork, killThread )
@@ -230,6 +231,9 @@ getAppStore = asks appStore
 getCommand :: Adaptor app Request Command
 getCommand = command <$> asks request
 ----------------------------------------------------------------------------
+getClientCapabilities :: Adaptor app request (Maybe InitializeRequestArguments)
+getClientCapabilities = asks clientCapabilities
+-------------------------------------------------------------------------------
 -- | 'sendRaw' (internal use only)
 -- Sends a raw JSON payload to the editor. No "seq", "type" or "command" fields are set.
 -- The message is still encoded with the ProtocolMessage Header, byte count, and CRLF.
