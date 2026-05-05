@@ -1,5 +1,10 @@
 # Revision history for dap
 
+## 0.6.0.0 -- 2026-05-04
+
+* Keep track of the client capabilities reported by the Initialize request in
+  the session (#32)
+
 ## 0.5.0.0 -- 2026-04-15
 
 * No longer print "Handling" messages which cause confusion wrt actual errors occurring (#30)
