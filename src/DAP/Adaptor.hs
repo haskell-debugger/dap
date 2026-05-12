@@ -306,7 +306,7 @@ sendReverseRequest
   :: ReverseCommand
   -> Adaptor app Request ()
 sendReverseRequest rcmd = send $ do
-  setField "type" MessageTypeRequest
+  setType MessageTypeRequest
   setField "command" rcmd
 ----------------------------------------------------------------------------
 -- | Send runInTerminal reverse request
