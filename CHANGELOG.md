@@ -1,5 +1,11 @@
 # Revision history for dap
 
+## 0.7.0.0 -- 2026-05-20
+
+* Fix exceptionOptions DAP conformance: it should be a list
+* Fix reverse request: don't include response seq number which trips up some
+  DAP clients
+
 ## 0.6.0.0 -- 2026-05-04
 
 * Keep track of the client capabilities reported by the Initialize request in
