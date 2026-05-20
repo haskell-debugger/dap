@@ -3172,7 +3172,7 @@ data SetExceptionBreakpointsArguments
     -- corresponding capability `supportsExceptionFilterOptions` is true. The
     -- `filter` and `filterOptions` sets are additive.
     --
-  , setExceptionBreakpointsArgumentsExceptionOptions :: Maybe ExceptionOptions
+  , setExceptionBreakpointsArgumentsExceptionOptions :: Maybe [ExceptionOptions]
    -- ^
    -- Configuration options for selected exceptions.
    -- The attribute is only honored by a debug adapter if the corresponding
