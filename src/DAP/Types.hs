@@ -3325,7 +3325,7 @@ data ContinueArguments
     -- execution (see `supportsSingleThreadExecutionRequests`) and the argument
     -- `singleThread` is true, only the thread with this ID is resumed.
     --
-  , continueArgumentsSingleThread :: Bool
+  , continueArgumentsSingleThread :: Maybe Bool
     -- ^
     -- If this flag is true, execution is resumed only for the thread with given
     -- `threadId`.
