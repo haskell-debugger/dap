@@ -3363,7 +3363,7 @@ data StepInArguments
     -- Specifies the thread for which to resume execution for one step-into (of
     -- the given granularity).
     --
-  , stepInArgumentsSingleThread :: Bool
+  , stepInArgumentsSingleThread :: Maybe Bool
     -- ^
     -- If this flag is true, all other suspended threads are not resumed.
     --
@@ -3385,7 +3385,7 @@ data StepOutArguments
     -- Specifies the thread for which to resume execution for one step-out (of the
     -- given granularity).
     --
-  , stepOutArgumentsSingleThread :: Bool
+  , stepOutArgumentsSingleThread :: Maybe Bool
     -- ^
     -- If this flag is true, all other suspended threads are not resumed.
     --
@@ -3403,7 +3403,7 @@ data StepBackArguments
     -- Specifies the thread for which to resume execution for one step backwards
     -- (of the given granularity).
     --
-  , stepBackArgumentsSingleThread :: Bool
+  , stepBackArgumentsSingleThread :: Maybe Bool
     -- ^
     -- If this flag is true, all other suspended threads are not resumed.
     --
