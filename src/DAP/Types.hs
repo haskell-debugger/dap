@@ -3376,7 +3376,10 @@ data StepInArguments
     -- Stepping granularity. If no granularity is specified, a granularity of
     -- `statement` is assumed.
     --
-  } deriving stock (Show, Eq)
+  } deriving stock (Show, Eq, Generic)
+----------------------------------------------------------------------------
+instance FromJSON StepInArguments where
+  parseJSON = genericParseJSONWithModifier
 ----------------------------------------------------------------------------
 data StepOutArguments
   = StepOutArguments
@@ -3394,7 +3397,10 @@ data StepOutArguments
     -- Stepping granularity. If no granularity is specified, a granularity of
     -- `statement` is assumed.
     --
-  } deriving stock (Show, Eq)
+  } deriving stock (Show, Eq, Generic)
+----------------------------------------------------------------------------
+instance FromJSON StepOutArguments where
+  parseJSON = genericParseJSONWithModifier
 ----------------------------------------------------------------------------
 data StepBackArguments
   = StepBackArguments
@@ -3411,7 +3417,10 @@ data StepBackArguments
     -- ^
     -- Stepping granularity to step. If no granularity is specified, a granularity
     -- of `statement` is assumed.
-  } deriving stock (Show, Eq)
+  } deriving stock (Show, Eq, Generic)
+----------------------------------------------------------------------------
+instance FromJSON StepBackArguments where
+  parseJSON = genericParseJSONWithModifier
 ----------------------------------------------------------------------------
 data SteppingGranularity
   = SteppingGranularityStatement
