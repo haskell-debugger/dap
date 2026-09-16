@@ -1,5 +1,11 @@
 # Revision history for dap
 
+## 0.8.0.0 -- 2026-09-16
+
+* Fix continueArgumentsSingleThread DAP conformance
+* Fix step{In,Out,Back} singleThread DAP conformance
+* Add missing FromJSON to Step{In/Out/Back}Arguments
+
 ## 0.7.0.0 -- 2026-05-20
 
 * Fix exceptionOptions DAP conformance: it should be a list
